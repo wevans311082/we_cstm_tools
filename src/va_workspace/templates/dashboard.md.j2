@@ -1,0 +1,32 @@
+{{ managed }}
+---
+tags: [dashboard, dataview, {{ mode }}]
+---
+
+# Dashboard
+
+Requires the Dataview community plugin. Static tables remain in [[01-overview/network-overview]].
+
+## Hosts
+
+```dataview
+TABLE hostname, os, status, open_ports, services
+FROM "02-hosts"
+WHERE contains(file.tags, "host")
+SORT ip ASC
+```
+
+## Findings
+
+```dataview
+TABLE severity, cvss_score, status, hosts
+FROM "03-findings"
+WHERE contains(file.tags, "finding")
+SORT cvss_score DESC
+```
+
+## Leads (unverified)
+
+```dataview
+LIST FROM "04-leads"
+```

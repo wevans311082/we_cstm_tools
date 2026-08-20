@@ -1,0 +1,31 @@
+---
+tags: [report, check, scope]
+---
+
+# Background, scope, and context
+
+ITHC supporting guidance: communicate background, scope, and context in full.
+
+## Background
+
+_Why this health check exists (PSN, GovAssure, annual assurance, change, etc.)._
+
+## Scope
+
+See [[scope]] for the machine-readable list. Restate it in prose:
+
+- External / internal / both
+- Sample size if the estate was sampled (ITHC internal: not less than 10%)
+- Applications, remote access, gateways in or out of scope
+
+## Context
+
+_What the client told you about architecture, change freezes, and constraints._
+
+## Exclusions and limitations
+
+- Intensity used: `{{ intensity }}` (stealth avoids feroxbuster/gowitness)
+- Authentication: unauthenticated only in this vault version
+- `--nmap-args` overrides, if any, belong in [[00-report/07-appendix-tooling]]
+
+This page is **not** regenerated after you edit it.

@@ -1,0 +1,28 @@
+{{ managed }}
+---
+tags: [report, check, appendix]
+---
+
+# Appendix — tooling
+
+Reproducibility snapshot. Commands are also in `06-logs/va.log`.
+
+| Item | Value |
+| --- | --- |
+| va-workspace | {{ state.va_version }} |
+| Mode | {{ mode }} |
+| Intensity | {{ intensity }} |
+| Targets | {{ targets | join(", ") }} |
+| Excludes | {{ excludes | join(", ") if excludes else "none" }} |
+
+## Binary versions
+
+{% if state.binary_versions %}
+| Binary | Version |
+| --- | --- |
+{% for name, ver in state.binary_versions.items() %}
+| `{{ name }}` | {{ ver }} |
+{% endfor %}
+{% else %}
+_Run `va doctor` inside the engagement, or complete a scan, to snapshot versions._
+{% endif %}

@@ -1,0 +1,140 @@
+# Default unauthenticated tool plugins. Override by dropping a file at
+# ~/.config/va-workspace/tool_mappings.yaml (replace-by-id merge).
+#
+# Placeholders: {host} {port} {url} {outfile} {wordlist} {wordlist_loud} {community}
+# Forbidden in v1: {user} {password} {pass} {creds}
+
+tools:
+  - id: whatweb
+    binary: whatweb
+    install_hint: "sudo apt install whatweb"
+    min_intensity: stealth
+    timeout_seconds: 120
+    output: info
+    match:
+      ports: [80, 443, 8080, 8443, 8000, 8888]
+      services: [http, https, ssl/http, http-proxy]
+      http_only: true
+    argv:
+      stealth: ["{url}", "--color=never", "-a", "1"]
+      standard: ["{url}", "--color=never", "-a", "3"]
+      loud: ["{url}", "--color=never", "-a", "4"]
+
+  - id: sslscan
+    binary: sslscan
+    install_hint: "sudo apt install sslscan"
+    min_intensity: stealth
+    timeout_seconds: 180
+    output: info
+    match:
+      ports: [443, 8443, 636, 993, 995, 3389, 5986]
+      tunnel_ssl: true
+    argv:
+      stealth: ["--no-colour", "{host}:{port}"]
+      standard: ["--no-colour", "{host}:{port}"]
+      loud: ["--no-colour", "{host}:{port}"]
+
+  - id: feroxbuster
+    binary: feroxbuster
+    install_hint: "sudo apt install feroxbuster"
+    min_intensity: standard
+    timeout_seconds: 300
+    output: services
+    wordlist_kind: web
+    match:
+      ports: [80, 443, 8080, 8443, 8000, 8888]
+      services: [http, https, ssl/http]
+      http_only: true
+    argv:
+      stealth: []
+      standard:
+        ["-u", "{url}", "-w", "{wordlist}", "--depth", "1", "-n", "-q", "--no-state", "-o", "{outfile}"]
+      loud:
+        ["-u", "{url}", "-w", "{wordlist_loud}", "--depth", "2", "-q", "--no-state", "-o", "{outfile}"]
+
+  - id: gowitness
+    binary: gowitness
+    install_hint: "sudo apt install gowitness"
+    min_intensity: standard
+    timeout_seconds: 180
+    output: evidence
+    match:
+      ports: [80, 443, 8080, 8443, 8000, 8888]
+      services: [http, https, ssl/http]
+      http_only: true
+    argv:
+      stealth: []
+      standard: ["scan", "single", "{url}", "--disable-db", "--screenshot-path", "{outfile}"]
+      loud: ["scan", "single", "{url}", "--disable-db", "--screenshot-path", "{outfile}"]
+
+  - id: netexec-smb
+    binary: netexec
+    install_hint: "pipx install netexec"
+    min_intensity: stealth
+    timeout_seconds: 180
+    output: services
+    match:
+      ports: [139, 445]
+      services: [microsoft-ds, netbios-ssn, smb]
+      protocols: [tcp]
+    argv:
+      stealth: ["smb", "{host}"]
+      standard: ["smb", "{host}"]
+      loud: ["smb", "{host}"]
+
+  - id: netexec-ldap
+    binary: netexec
+    install_hint: "pipx install netexec"
+    min_intensity: standard
+    timeout_seconds: 180
+    output: services
+    match:
+      ports: [389, 636]
+      services: [ldap, ssl/ldap, ldapssl]
+    argv:
+      stealth: []
+      standard: ["ldap", "{host}"]
+      loud: ["ldap", "{host}"]
+
+  - id: netexec-winrm
+    binary: netexec
+    install_hint: "pipx install netexec"
+    min_intensity: standard
+    timeout_seconds: 120
+    output: services
+    match:
+      ports: [5985, 5986]
+      services: [wsman, ws-management, https-alt]
+    argv:
+      stealth: []
+      standard: ["winrm", "{host}"]
+      loud: ["winrm", "{host}"]
+
+  - id: onesixtyone
+    binary: onesixtyone
+    install_hint: "sudo apt install onesixtyone"
+    min_intensity: standard
+    timeout_seconds: 120
+    output: services
+    wordlist_kind: snmp
+    match:
+      ports: [161]
+      services: [snmp]
+    argv:
+      stealth: []
+      standard: ["-c", "{wordlist}", "{host}"]
+      loud: ["-c", "{wordlist}", "{host}"]
+
+  - id: snmpwalk
+    binary: snmpwalk
+    install_hint: "sudo apt install snmp"
+    min_intensity: loud
+    timeout_seconds: 180
+    output: loot
+    match:
+      ports: [161]
+      services: [snmp]
+    argv:
+      stealth: []
+      standard: []
+      loud: ["-v2c", "-c", "{community}", "{host}"]

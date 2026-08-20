@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<nmaprun scanner="nmap" args="nmap -sT -sV -oX mixed-lab.xml 10.10.10.0/24" start="1700000000" version="7.94" xmloutputversion="1.05">
+  <scaninfo type="connect" protocol="tcp" numservices="1000" services="1-1000"/>
+  <host>
+    <status state="up" reason="syn-ack"/>
+    <address addr="10.10.10.5" addrtype="ipv4"/>
+    <hostnames>
+      <hostname name="dc01.lab.local" type="PTR"/>
+    </hostnames>
+    <ports>
+      <port protocol="tcp" portid="80">
+        <state state="open" reason="syn-ack"/>
+        <service name="http" product="Microsoft IIS httpd" version="10.0" method="probed" conf="10"/>
+        <script id="http-title" output="IIS Windows Server"/>
+      </port>
+      <port protocol="tcp" portid="135">
+        <state state="open" reason="syn-ack"/>
+        <service name="msrpc" product="Microsoft Windows RPC" method="probed" conf="10"/>
+      </port>
+      <port protocol="tcp" portid="139">
+        <state state="open" reason="syn-ack"/>
+        <service name="netbios-ssn" product="Microsoft Windows netbios-ssn" method="probed" conf="10"/>
+      </port>
+      <port protocol="tcp" portid="443">
+        <state state="open" reason="syn-ack"/>
+        <service name="http" product="Microsoft HTTPAPI httpd" version="2.0" tunnel="ssl" method="probed" conf="10"/>
+      </port>
+      <port protocol="tcp" portid="445">
+        <state state="open" reason="syn-ack"/>
+        <service name="microsoft-ds" method="probed" conf="10"/>
+      </port>
+      <port protocol="tcp" portid="3389">
+        <state state="filtered" reason="no-response"/>
+        <service name="ms-wbt-server" method="table" conf="3"/>
+      </port>
+      <port protocol="tcp" portid="5985">
+        <state state="open" reason="syn-ack"/>
+        <service name="wsman" method="probed" conf="10"/>
+      </port>
+    </ports>
+    <os>
+      <osmatch name="Microsoft Windows Server 2019" accuracy="95"/>
+    </os>
+    <hostscript>
+      <script id="smb-os-discovery" output="OS: Windows Server 2019; Computer name: DC01"/>
+    </hostscript>
+  </host>
+  <host>
+    <status state="up" reason="syn-ack"/>
+    <address addr="10.10.10.8" addrtype="ipv4"/>
+    <hostnames>
+      <hostname name="web01.lab.local" type="PTR"/>
+    </hostnames>
+    <ports>
+      <port protocol="tcp" portid="22">
+        <state state="open" reason="syn-ack"/>
+        <service name="ssh" product="OpenSSH" version="8.9p1 Ubuntu 3" method="probed" conf="10"/>
+      </port>
+      <port protocol="tcp" portid="80">
+        <state state="open" reason="syn-ack"/>
+        <service name="http" product="Apache httpd" version="2.4.52" method="probed" conf="10"/>
+      </port>
+      <port protocol="tcp" portid="443">
+        <state state="open" reason="syn-ack"/>
+        <service name="http" product="Apache httpd" version="2.4.52" tunnel="ssl" method="probed" conf="10"/>
+      </port>
+      <port protocol="udp" portid="161">
+        <state state="open" reason="udp-response"/>
+        <service name="snmp" method="table" conf="3"/>
+      </port>
+    </ports>
+    <os>
+      <osmatch name="Linux 5.15" accuracy="90"/>
+    </os>
+  </host>
+  <host>
+    <status state="down" reason="no-response"/>
+    <address addr="10.10.10.9" addrtype="ipv4"/>
+  </host>
+  <runstats>
+    <finished time="1700000100" timestr="Thu Nov 14 00:00:00 2023" summary="Nmap done"/>
+    <hosts up="2" down="1" total="3"/>
+  </runstats>
+</nmaprun>

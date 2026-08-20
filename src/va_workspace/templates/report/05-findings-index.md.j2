@@ -1,0 +1,25 @@
+{{ managed }}
+---
+tags: [report, check, findings]
+---
+
+# Findings index
+
+CVSS 3.1 base scores as preferred by ITHC supporting guidance. Counts below are from `va finding` notes in `03-findings/`.
+
+| ID | Title | Severity | Score | Status | Hosts |
+| --- | --- | --- | --- | --- | --- |
+{% if finding_ids %}
+{% for id in finding_ids %}
+| {{ id }} | (see `03-findings/`) |  |  |  |  |
+{% endfor %}
+{% else %}
+| _No findings authored yet._ |  |  |  |  |  |
+{% endif %}
+
+```dataview
+TABLE severity, cvss_score, status, hosts
+FROM "03-findings"
+WHERE contains(file.tags, "finding")
+SORT cvss_score DESC
+```

@@ -1,0 +1,31 @@
+---
+tags: [report, check, people]
+---
+
+# Cover and people
+
+| Field | Value |
+| --- | --- |
+| Client | {{ client }} |
+| Classification | {{ classification }} |
+| Mode | {{ mode }} |
+| Dates | {{ state.created }} — |
+| Tooling | va-workspace {{ state.va_version }} |
+
+## Individuals involved
+
+ITHC supporting guidance requires the report to name the people who performed the health check.
+
+| Role | Name | Notes |
+| --- | --- | --- |
+{% for t in testers %}
+| Tester | {{ t }} | CSTM / CHECK Team Member candidate |
+{% endfor %}
+{% if not testers %}
+| Tester | _add name_ | |
+{% endif %}
+| Reviewer / Team Leader | _add name_ | |
+| Client contact | _add name_ | |
+| Accreditor (if any) | _add name_ | |
+
+This page is **not** regenerated after you edit it.

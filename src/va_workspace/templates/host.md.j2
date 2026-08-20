@@ -1,0 +1,64 @@
+{{ managed }}
+---
+ip: "{{ host.ip }}"
+hostname: "{{ host.primary_hostname }}"
+os: "{{ host.os }}"
+status: "{{ host.status }}"
+open_ports: [{% for p in host.open_port_numbers %}{{ p }}{% if not loop.last %}, {% endif %}{% endfor %}]
+services: [{% for s in host.service_names %}"{{ s }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+tags:
+  - host
+  - {{ mode }}
+---
+
+# {{ host.ip }}{% if host.primary_hostname %} — {{ host.primary_hostname }}{% endif %}
+
+Status: `{{ host.status }}`  
+OS: {{ host.os or "_unknown_" }}  
+Hostnames: {% if host.hostnames %}{{ host.hostnames | join(", ") }}{% else %}_none_{% endif %}
+
+## Ports
+
+| Port | Proto | State | Service | Product | Version | TLS |
+| --- | --- | --- | --- | --- | --- | --- |
+{% for p in host.ports %}
+| {{ p.number }} | {{ p.protocol }} | {{ p.state }} | {{ p.service }} | {{ p.product }} | {{ p.version }} | {{ "yes" if p.is_tls else "" }} |
+{% endfor %}
+{% if not host.ports %}
+| _none_ |  |  |  |  |  |  |
+{% endif %}
+
+## NSE / host scripts
+
+{% if host.host_scripts %}
+{% for s in host.host_scripts %}
+### {{ s.id }}
+
+```
+{{ s.output }}
+```
+{% endfor %}
+{% else %}
+_No host scripts._
+{% endif %}
+
+{% for p in host.ports if p.scripts %}
+### {{ p.number }}/{{ p.protocol }} scripts
+
+{% for s in p.scripts %}
+#### {{ s.id }}
+
+```
+{{ s.output }}
+```
+{% endfor %}
+{% endfor %}
+
+## Folders
+
+- [[02-hosts/{{ host.slug }}/services]]
+- [[02-hosts/{{ host.slug }}/info]]
+- [[02-hosts/{{ host.slug }}/loot]]
+- [[02-hosts/{{ host.slug }}/evidence]]
+
+[[01-overview/network-overview]]

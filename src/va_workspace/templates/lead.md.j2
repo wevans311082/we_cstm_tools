@@ -1,0 +1,19 @@
+{{ managed }}
+---
+tags: [lead, unverified, {{ mode }}]
+host: "{{ host.ip }}"
+product: "{{ product }}"
+version: "{{ version }}"
+---
+
+# Lead — {{ product }} {{ version }} on {{ host.ip }}
+
+**Unverified.** Do not copy this into the CHECK report. Promote with `va finding add` only after you have reproduced an issue.
+
+Service: `{{ service }}` on {{ port }}/{{ protocol }}
+
+```
+{{ body }}
+```
+
+[[02-hosts/{{ host.slug }}/host]]

@@ -1,0 +1,16 @@
+{{ managed }}
+---
+tags: [roe, {{ mode }}]
+---
+
+# Rules of engagement
+
+| Field | Value |
+| --- | --- |
+| Mode | `{{ mode }}` |
+| Intensity | `{{ intensity }}` |
+| Authentication | Unauthenticated only (v1) |
+| NSE `vuln` | Off unless operator passed `--nmap-args` |
+| Classification | {{ classification }} |
+
+Authorised testing window, emergency contacts, and any DoS / brute-force prohibitions go here. `va` does not replace a signed RoE.

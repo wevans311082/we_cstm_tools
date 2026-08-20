@@ -1,0 +1,23 @@
+{{ managed }}
+---
+tags: [overview, {{ mode }}]
+---
+
+# Network overview
+
+Client: **{{ client }}** · Mode: `{{ mode }}` · Intensity: `{{ intensity }}`  
+Hosts up: **{{ up_hosts | length }}** / {{ hosts | length }}
+
+## Hosts
+
+| Host | Hostname | OS | Open ports | Services |
+| --- | --- | --- | --- | --- |
+{% for host in hosts %}
+| [[02-hosts/{{ host.slug }}/host\|{{ host.ip }}]] | {{ host.primary_hostname }} | {{ host.os }} | {{ host.open_port_numbers | join(", ") }} | {{ host.service_names | join(", ") }} |
+{% endfor %}
+{% if not hosts %}
+| _No hosts parsed yet._ |  |  |  |  |
+{% endif %}
+
+Topology: [[01-overview/network]]  
+Dashboard: [[01-overview/dashboard]]

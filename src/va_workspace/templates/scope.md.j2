@@ -1,0 +1,28 @@
+{{ managed }}
+---
+tags: [scope, {{ mode }}]
+---
+
+# Scope
+
+## In scope
+
+{% if targets %}
+{% for t in targets %}
+- `{{ t }}`
+{% endfor %}
+{% else %}
+- _Not recorded. Add CIDRs, hostnames, and application URLs._
+{% endif %}
+
+## Out of scope
+
+{% if excludes %}
+{% for t in excludes %}
+- `{{ t }}`
+{% endfor %}
+{% else %}
+- _None recorded. Add exclusions here and pass `--exclude` on the CLI._
+{% endif %}
+
+Secondary tools will not be pointed at hosts outside the in-scope set.

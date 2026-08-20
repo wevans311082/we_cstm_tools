@@ -1,75 +1,15 @@
-# Context and Role
-You are an expert Principal Security Engineer and Python Developer. Your task is to build `va-workspace`, an automated Vulnerability Assessment (VA) reconnaissance and Obsidian workspace generation engine. 
+# va-workspace — implementation pointer
 
-# Project Objective
-Build a modular CLI framework that orchestrates network discovery via Nmap, parses the XML output, automatically triggers targeted secondary enumeration tools (like netexec, feroxbuster, and gowitness), and generates a fully linked, structured Obsidian Markdown vault containing host summaries, Dataview dashboards, and generated network topology canvases.
+This file is **not** the product spec. Do not implement from the old six-phase codegen prompt.
 
-# Technology Stack
-- **Language:** Python 3.11+
-- **CLI Framework:** Typer (for subcommands)
-- **Terminal UI:** Rich (for progress bars and logging)
-- **Templating:** Jinja2 (for rendering Markdown notes)
-- **Data Parsing:** xml.etree.ElementTree, PyYAML
-- **Visuals:** Matplotlib, Seaborn (for charts), JSON (for Obsidian .canvas)
-- **External Binaries:** nmap, whatweb, feroxbuster, netexec, enum4linux-ng, sslscan, gowitness, searchsploit
+**Source of truth:** [`SPEC.md`](SPEC.md)
 
-# System Architecture & Directory Structure
-The application should be structured as a standard Python package:
-va-workspace/
-├── pyproject.toml
-├── requirements.txt
-├── config/
-│   ├── tool_mappings.yaml
-│   └── templates/
-│       ├── host_summary.md.j2
-│       └── network_overview.md.j2
-├── src/
-│   └── va_workspace/
-│       ├── init.py
-│       ├── cli.py
-│       ├── core/
-│       │   ├── scanner.py          # Nmap wrapper
-│       │   ├── vault_builder.py    # XML parser and Markdown generator
-│       │   ├── orchestrator.py     # Secondary tool dispatcher
-│       │   ├── visualizer.py       # Matplotlib & Obsidian Canvas generator
-│       │   └── vuln_matcher.py     # Searchsploit local query engine
-│       └── utils/
-│           └── shell.py            # Subprocess wrapper and binary checker
+- CLI: `va`
+- Package: `va_workspace`
+- Runtime: Kali Linux (pipx + apt/pipx binaries)
+- Dev: Windows-friendly parser, vault, ingest, and unit tests (no live Nmap required)
+- Findings are operator-authored; tools produce evidence and leads only
+- No placeholders, strict type hints, no `shell=True`
+- Authorised-use only. Not NCSC-endorsed.
 
-
-# Execution Rules (CRITICAL)
-1. **NO PLACEHOLDERS:** Write complete, fully functional code. Do not use comments like `# ... rest of logic here`. 
-2. **Error Handling:** Wrap all external binary executions (`subprocess.run`) in `try/except` blocks with timeouts. 
-3. **Graceful Degradation:** If a secondary tool (e.g., `gowitness`) is missing on the host OS, log a warning via `Rich` and continue execution.
-4. **Type Hinting:** Use strict Python type hints for all function arguments and return values.
-
-# Implementation Phases
-
-Please implement this project step-by-step. Stop and ask for confirmation after completing each phase before moving to the next.
-
-## Phase 1: Environment & Config Setup
-- Generate `requirements.txt` and `pyproject.toml`.
-- Create `src/va_workspace/utils/shell.py` with a utility to check if required OS binaries are installed and a safe `run_command` function.
-- Create `config/tool_mappings.yaml` mapping ports (80, 443, 445, 161, 389) to their respective secondary CLI tools (e.g., `feroxbuster`, `netexec smb`, `onesixtyone`).
-
-## Phase 2: Core Scanner & XML Parser
-- Implement `scanner.py` to wrap Nmap using `subprocess`. It must take a target CIDR and output `-oA` files.
-- Implement `vault_builder.py` using `xml.etree.ElementTree` to parse the Nmap XML. Extract IP, OS, Hostnames, Ports, Service Names, Product/Version, and NSE script outputs.
-
-## Phase 3: Obsidian Vault & Template Generation
-- Create the Jinja2 templates (`host_summary.md.j2` and `network_overview.md.j2`). Include YAML frontmatter for Obsidian and layout the tables for ports and NSE findings.
-- Extend `vault_builder.py` to create the target directory structure (`/services`, `/loot`, `/info`) for each discovered IP and render the Jinja2 templates to disk.
-
-## Phase 4: Targeted Secondary Dispatcher
-- Implement `orchestrator.py`. It should read `tool_mappings.yaml` and the parsed open ports.
-- Use `concurrent.futures.ThreadPoolExecutor` to launch the mapped CLI tools (e.g., if port 445 is open, launch `netexec`). Route the `stdout` of these tools into the respective host's `/services` or `/info` directory.
-
-## Phase 5: Visual Analytics & Exploit Matching
-- Implement `visualizer.py` using Matplotlib to create a bar chart of top discovered services, saved to the vault's `/attachments` folder.
-- Add a method to generate a native Obsidian `.canvas` JSON file visually linking a central "Network" node to "Host" nodes.
-- Implement `vuln_matcher.py` to query local `searchsploit --json` based on Nmap product/version strings and inject results into the host templates.
-
-## Phase 6: CLI Interface
-- Implement `cli.py` using `Typer`. Provide a `scan` command that strings the entire workflow together: Scanner -> Parser -> Vault Builder -> Orchestrator -> Visualizer. Use `rich.progress` to show status to the user.
-
-Begin by confirming you understand the architecture, then output the code for Phase 1.
+Implement the next unfinished PR in SPEC.md §13.

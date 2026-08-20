@@ -1,0 +1,50 @@
+{{ managed }}
+---
+id: "{{ finding.id }}"
+title: "{{ finding.title }}"
+cvss_vector: "{{ finding.cvss_vector }}"
+cvss_score: {{ finding.cvss_score }}
+severity: "{{ finding.severity }}"
+status: "{{ finding.status }}"
+hosts: [{% for h in finding.hosts %}"{{ h }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+ports: [{% for p in finding.ports %}"{{ p }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+created: "{{ finding.created }}"
+tags:
+  - finding
+  - {{ finding.severity }}
+  - {{ mode }}
+---
+
+# {{ finding.id }} — {{ finding.title }}
+
+| Field | Value |
+| --- | --- |
+| CVSS 3.1 | `{{ finding.cvss_vector }}` ({{ finding.cvss_score }}) |
+| Severity | **{{ finding.severity }}** |
+| Status | `{{ finding.status }}` |
+| Hosts | {% for h in finding.hosts %}[[02-hosts/{{ h }}/host\|{{ h }}]]{% if not loop.last %}, {% endif %}{% else %}_none_{% endfor %} |
+| Ports | {{ finding.ports | join(", ") if finding.ports else "_none_" }} |
+
+## Description
+
+{{ finding.description or "_Operator: describe the issue so an IT team can reproduce it._" }}
+
+## Evidence
+
+{% if finding.evidence %}
+{% for e in finding.evidence %}
+- {{ e }}
+{% endfor %}
+{% else %}
+- _Link raw tool output, screenshots under `02-hosts/<ip>/evidence`, and vault notes._
+{% endif %}
+
+## Short-term remedial action
+
+{{ finding.short_term_fix or "_Containment: restrict access, monitor, or workaround until the strategic fix lands._" }}
+
+## Strategic remedial action
+
+{{ finding.strategic_fix or "_Root-cause fix: patch, rebuild, or redesign the control._" }}
+
+[[00-report/05-findings-index]]

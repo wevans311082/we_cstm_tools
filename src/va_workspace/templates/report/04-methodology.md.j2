@@ -1,0 +1,17 @@
+---
+tags: [report, check, methodology]
+---
+
+# Methodology
+
+Testing was performed with `va-workspace` as the operator notebook, Nmap as the discovery engine, and targeted unauthenticated secondary tools mapped from open ports.
+
+1. Scope recorded (CLI targets / [[scope]]).
+2. Nmap discovery and service/version enumeration (profile `{{ intensity }}`).
+3. Targeted unauthenticated enumeration (see [[00-report/07-appendix-tooling]]).
+4. Manual verification and operator-authored findings with CVSS 3.1 base scores.
+5. Evidence retained under `02-hosts/` and `05-raw/`.
+
+Automated tool output is **evidence**, not a finding. Searchsploit matches live in [[04-leads]] until promoted.
+
+This page is **not** regenerated after you edit it.
