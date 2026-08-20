@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from va_workspace.config.nse import nse_script_arg, nse_scripts
+from va_workspace.config.nse import nse_script_arg
 from va_workspace.constants import (
     DEFAULT_INTENSITY,
     PROFILE_DELAY_SECONDS,
@@ -149,12 +149,12 @@ def build_nmap_argv(
             notes.append("not root: skipping OS detection (-O)")
 
     if include_scripts:
-        scripts = nse_scripts(mode, intensity)
-        if scripts:
+        script_arg = nse_script_arg(mode, intensity)
+        if script_arg:
             argv.extend(
                 [
                     "--script",
-                    nse_script_arg(scripts),
+                    script_arg,
                     "--script-timeout",
                     profile.script_timeout,
                 ]
@@ -273,8 +273,8 @@ def build_scripts_argv(
     privileged: bool | None = None,
 ) -> tuple[list[str], list[str]]:
     profile = nmap_profile(intensity)
-    scripts = nse_scripts(mode, intensity)
-    if not scripts or not ports:
+    script_arg = nse_script_arg(mode, intensity)
+    if not script_arg or not ports:
         return [], ["no NSE scripts or no open ports"]
     notes: list[str] = []
     root = is_privileged() if privileged is None else privileged
@@ -289,7 +289,7 @@ def build_scripts_argv(
         "-p",
         port_spec,
         "--script",
-        nse_script_arg(scripts),
+        script_arg,
         "--script-timeout",
         profile.script_timeout,
         "--reason",

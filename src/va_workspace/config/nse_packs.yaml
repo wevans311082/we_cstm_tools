@@ -1,6 +1,31 @@
-# Named NSE packs. Nmap still applies each script's own portrule.
+# Stock Nmap scripts (names only — Lua lives in /usr/share/nmap/scripts).
+# Custom va-*.nse Lua lives in src/va_workspace/nse/ and is selected via
+# custom_stealth / custom_standard / custom_loud below.
 # standard = stealth + standard; loud = standard + loud.
 # never_check scripts are stripped when --mode check.
+
+custom_stealth:
+  - va-http-posture
+  - va-tls-posture
+  - va-cert-sans
+  - va-smb-posture
+  - va-ssh-posture
+  - va-ftp-anon
+  - va-redirect-scope
+  - va-interesting-host
+  - va-http-default-page
+
+custom_standard:
+  - va-ad-unauth
+  - va-snmp-public
+  - va-nfs-exports
+  - va-rdp-posture
+  - va-git-exposed
+  - va-mail-posture
+  - va-db-unauth
+
+custom_loud:
+  - va-git-exposed
 
 stealth:
   - banner

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "va-workspace"
-version = "0.2.0"
+version = "0.3.0"
 description = "Kali operator toolkit that turns Nmap reconnaissance into a CHECK-shaped Obsidian vault."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -49,6 +49,8 @@ where = ["src"]
 va_workspace = [
   "py.typed",
   "config/*.yaml",
+  "nse/*.nse",
+  "nse/*.md",
   "templates/*.j2",
   "templates/report/*.j2",
 ]

@@ -1,5 +1,80 @@
 # Auto-leads from NSE output. Never become findings until the operator promotes them.
 rules:
+  - id: va-hsts
+    script: va-http-posture
+    pattern: "(?i)hsts: missing"
+    title: "Missing HTTP security headers"
+    template: missing-hsts
+  - id: va-cookies
+    script: va-http-posture
+    pattern: "(?i)missing-httponly|missing-secure"
+    title: "Cookie security flags"
+    template: cookie-flags
+  - id: va-trace
+    script: va-http-posture
+    pattern: "(?i)trace: enabled"
+    title: "HTTP TRACE enabled"
+    template: http-trace
+  - id: va-methods
+    script: va-http-posture
+    pattern: "(?i)dangerous_methods: yes"
+    title: "Dangerous HTTP methods"
+    template: http-methods
+  - id: va-git
+    script: va-git-exposed
+    pattern: "(?i)\\.git|actuator|phpinfo|manager"
+    title: "Sensitive HTTP path exposed"
+    template: git-exposed
+  - id: va-expired-cert
+    script: va-tls-posture
+    pattern: "(?i)expired: yes"
+    title: "Expired TLS certificate"
+    template: expired-cert
+  - id: va-weak-key
+    script: va-tls-posture
+    pattern: "(?i)weak_key: yes"
+    title: "Weak TLS key"
+    template: expired-cert
+  - id: va-smb-anon
+    script: va-smb-posture
+    pattern: "(?i)anonymous_shares: .+"
+    title: "Unauthenticated SMB shares"
+    template: smb-null
+  - id: va-ssh-weak
+    script: va-ssh-posture
+    pattern: "(?i)weak_algorithms: .+"
+    title: "Weak SSH algorithms"
+    template: ssh-weak
+  - id: va-ftp
+    script: va-ftp-anon
+    pattern: "(?i)anonymous: allowed"
+    title: "Anonymous FTP"
+    template: ftp-anon
+  - id: va-snmp
+    script: va-snmp-public
+    pattern: "(?i)public: yes"
+    title: "SNMP community public"
+    template: snmp-public
+  - id: va-redirect
+    script: va-redirect-scope
+    pattern: "(?i)off_host: yes"
+    title: "HTTP redirect off-host"
+    template: internal-ip
+  - id: va-rdp
+    script: va-rdp-posture
+    pattern: "(?i)exposed: yes"
+    title: "RDP exposed"
+    template: rdp-exposed
+  - id: va-redis
+    script: va-db-unauth
+    pattern: "(?i)unauth: yes"
+    title: "Data store without authentication"
+    template: redis-unauth
+  - id: va-default-page
+    script: va-http-default-page
+    pattern: "(?i)default_page: yes"
+    title: "Default HTTP page / management UI"
+    template: missing-hsts
   - id: ftp-anon
     script: ftp-anon
     pattern: "(?i)anonymous"

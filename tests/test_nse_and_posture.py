@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from va_workspace.config.nse import nse_scripts
+from va_workspace.config.nse import (
+    custom_nse_names,
+    list_custom_nse,
+    nse_script_arg,
+    nse_scripts,
+    packaged_nse_dir,
+)
 from va_workspace.constants import Intensity, Mode
 from va_workspace.core.compare import compare_states
 from va_workspace.core.nmap_parser import merge_hosts, parse_nmap_xml
@@ -10,6 +16,31 @@ from va_workspace.core.nse_leads import match_leads
 from va_workspace.core.roles import infer_role
 from va_workspace.core.templates import get_template, load_finding_templates
 from va_workspace.models import EngagementState, Host, Port
+
+
+def test_custom_lua_scripts_shipped() -> None:
+    files = list_custom_nse()
+    names = {path.name for path in files}
+    assert packaged_nse_dir().is_dir()
+    assert "va-http-posture.nse" in names
+    assert "va-smb-posture.nse" in names
+    assert "va-ssh-posture.nse" in names
+    assert len(files) >= 10
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        assert "categories" in text
+        assert "action" in text
+
+
+def test_custom_pack_and_script_arg() -> None:
+    stealth = custom_nse_names(Mode.CHECK, Intensity.STEALTH)
+    standard = custom_nse_names(Mode.CHECK, Intensity.STANDARD)
+    assert "va-http-posture" in stealth
+    assert "va-ad-unauth" not in stealth
+    assert "va-ad-unauth" in standard
+    arg = nse_script_arg(Mode.CHECK, Intensity.STEALTH)
+    assert "va-http-posture.nse" in arg
+    assert "ssl-cert" in arg
 
 
 def test_nse_packs_accumulate_and_check_strips() -> None:

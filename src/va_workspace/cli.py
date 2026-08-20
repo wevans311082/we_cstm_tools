@@ -9,6 +9,11 @@ import typer
 from rich.table import Table
 
 from va_workspace import __version__
+from va_workspace.config.nse import (
+    custom_nse_names,
+    list_custom_nse,
+    packaged_nse_dir,
+)
 from va_workspace.config.profiles import intensity_or_default
 from va_workspace.constants import FindingStatus, Intensity, JobStatus, Mode
 from va_workspace.core.compare import write_compare
@@ -37,7 +42,9 @@ app = typer.Typer(
     help="Kali operator toolkit: Nmap reconnaissance → CHECK-shaped Obsidian vault.",
 )
 finding_app = typer.Typer(no_args_is_help=True, help="Operator-authored findings (CVSS 3.1).")
+nse_app = typer.Typer(no_args_is_help=True, help="Custom va-*.nse Lua scripts.")
 app.add_typer(finding_app, name="finding")
+app.add_typer(nse_app, name="nse")
 
 
 ModeOpt = typer.Option(Mode.LAB, "--mode", help="check | lab | internal")
@@ -53,6 +60,33 @@ def _root(
 ) -> None:
     """va-workspace."""
     _ = (verbose, yes)
+
+
+@nse_app.command("path")
+def nse_path() -> None:
+    """Print the directory of custom va-*.nse Lua files."""
+    typer.echo(str(packaged_nse_dir()))
+
+
+@nse_app.command("list")
+def nse_list(
+    mode: Mode = ModeOpt,
+    intensity: Intensity | None = IntensityOpt,
+) -> None:
+    """List custom Lua scripts (and which pack they belong to)."""
+    resolved = intensity_or_default(mode, intensity)
+    selected = set(custom_nse_names(mode, resolved))
+    table = Table(title=f"Custom NSE  mode={mode} intensity={resolved}")
+    table.add_column("Script")
+    table.add_column("This scan")
+    for path in list_custom_nse():
+        name = path.stem
+        table.add_row(name + ".nse", "yes" if name in selected else "no")
+    if not list_custom_nse():
+        log.warn("no va-*.nse files found — reinstall the package")
+        raise typer.Exit(code=1)
+    out_console.print(table)
+    out_console.print(f"path: {packaged_nse_dir()}")
 
 
 @app.command()
@@ -84,7 +118,9 @@ def doctor() -> None:
     if report.mapping_error:
         log.error(f"tool mappings failed to load: {report.mapping_error}")
         raise typer.Exit(code=1)
+    nse_files = list_custom_nse()
     log.info(f"loaded {report.mapping_count} tool mapping(s)")
+    log.info(f"custom NSE Lua: {len(nse_files)} script(s) in {packaged_nse_dir()}")
     if not sys.platform.startswith("linux"):
         log.warn("this OS is fine for ingest/tests; live va scan requires Kali/Linux")
     if report.required_missing:
