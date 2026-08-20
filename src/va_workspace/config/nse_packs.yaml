@@ -23,6 +23,10 @@ custom_stealth:
   - va-x11-open
   - va-docker-api
   - va-nbstat
+  - va-kerberos-info
+  - va-rpc-135
+  - va-http-open-proxy
+  - va-http-dirlisting
 
 custom_standard:
   - va-ad-unauth
@@ -48,6 +52,19 @@ custom_standard:
   - va-mqtt-unauth
   - va-cisco-smi
   - va-tftp-files
+  - va-adws
+  - va-vpn-portals
+  - va-k8s-apiserver
+  - va-vsphere
+  - va-proxmox
+  - va-etcd
+  - va-consul
+  - va-elasticsearch
+  - va-kibana
+  - va-mikrotik-winbox
+  - va-ilo-idrac
+  - va-jetdirect
+  - va-imap-pop
 
 custom_loud:
   - va-git-exposed

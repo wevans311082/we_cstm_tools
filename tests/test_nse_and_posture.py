@@ -25,7 +25,7 @@ def test_custom_lua_scripts_shipped() -> None:
     assert "va-http-posture.nse" in names
     assert "va-smb-posture.nse" in names
     assert "va-ssh-posture.nse" in names
-    assert len(files) >= 40
+    assert len(files) >= 60
     for path in files:
         text = path.read_text(encoding="utf-8")
         assert "categories" in text
@@ -36,6 +36,7 @@ def test_custom_pack_and_script_arg() -> None:
     stealth = custom_nse_names(Mode.CHECK, Intensity.STEALTH)
     standard = custom_nse_names(Mode.CHECK, Intensity.STANDARD)
     assert "va-http-posture" in stealth
+    assert "va-kerberos-info" in stealth
     assert "va-http-cors" in stealth
     assert "va-ad-unauth" not in stealth
     assert "va-ad-unauth" in standard

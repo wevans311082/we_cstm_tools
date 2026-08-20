@@ -49,10 +49,14 @@ action = function(host)
     end
   end
 
-  -- Signing is not always exposed; record whatever get_os gave us.
   if osinfo and type(osinfo) == "table" and osinfo.signing then
     out.signing = tostring(osinfo.signing)
   end
 
+  local ok2, smb2 = pcall(require, "smb2")
+  if ok2 and smb2 then
+    out.smb2_lib = "yes"
+  end
+  out.signing_source = "pair-with-python-smb_unauth-for-flags"
   return out
 end

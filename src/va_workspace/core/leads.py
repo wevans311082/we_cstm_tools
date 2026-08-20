@@ -27,6 +27,12 @@ def write_leads(state: EngagementState) -> int:
     nse_count = write_nse_leads(state)
     if nse_count:
         log.info(f"wrote {nse_count} NSE lead note(s)")
+    from va_workspace.core.python_leads import write_python_leads
+
+    py_count = write_python_leads(state)
+    if py_count:
+        log.info(f"wrote {py_count} Python-probe lead note(s)")
+    nse_count += py_count
     binary = which("searchsploit")
     if binary is None:
         log.warn("searchsploit not on PATH — skipping exploit leads (sudo apt install exploitdb)")

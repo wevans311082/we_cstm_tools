@@ -67,6 +67,7 @@ def interpolate_argv(
         "{wordlist}": str(wordlist) if wordlist else "",
         "{wordlist_loud}": str(wordlist_loud or wordlist or ""),
         "{community}": community,
+        "{python}": __import__("sys").executable,
     }
     rendered: list[str] = []
     for item in template:

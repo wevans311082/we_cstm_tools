@@ -209,3 +209,109 @@ tools:
       stealth: []
       standard: []
       loud: ["smb", "{host}", "-M", "ms17-010"]
+
+  - id: py-smb-unauth
+    binary: python3
+    python_module: va_workspace.tools.smb_unauth
+    install_hint: "bundled"
+    min_intensity: stealth
+    timeout_seconds: 15
+    output: services
+    match:
+      ports: [139, 445]
+      services: [microsoft-ds, netbios-ssn, smb]
+    argv:
+      stealth: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+      standard: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+      loud: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+
+  - id: py-tls-versions
+    binary: python3
+    python_module: va_workspace.tools.tls_versions
+    install_hint: "bundled"
+    min_intensity: stealth
+    timeout_seconds: 20
+    output: info
+    match:
+      ports: [443, 8443, 636, 993, 995, 3389, 5986, 9443]
+      tunnel_ssl: true
+    argv:
+      stealth: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+      standard: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+      loud: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+
+  - id: py-vpn-portals
+    binary: python3
+    python_module: va_workspace.tools.vpn_portals
+    install_hint: "bundled"
+    min_intensity: stealth
+    timeout_seconds: 40
+    output: info
+    match:
+      ports: [80, 443, 4443, 8443, 10443]
+      services: [http, https, ssl/http]
+    argv:
+      stealth: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+      standard: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+      loud: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+
+  - id: py-ldap-anon
+    binary: python3
+    python_module: va_workspace.tools.ldap_anon
+    install_hint: "bundled"
+    min_intensity: stealth
+    timeout_seconds: 15
+    output: info
+    match:
+      ports: [389, 3268]
+      services: [ldap]
+    argv:
+      stealth: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+      standard: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+      loud: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+
+  - id: py-http-intel
+    binary: python3
+    python_module: va_workspace.tools.http_intel
+    install_hint: "bundled"
+    min_intensity: standard
+    timeout_seconds: 40
+    output: services
+    match:
+      ports: [80, 443, 8080, 8443, 8000, 8888, 3128]
+      services: [http, https, ssl/http, http-proxy]
+      http_only: true
+    argv:
+      stealth: []
+      standard: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+      loud: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+
+  - id: py-postgres
+    binary: python3
+    python_module: va_workspace.tools.postgres_probe
+    install_hint: "bundled"
+    min_intensity: standard
+    timeout_seconds: 12
+    output: services
+    match:
+      ports: [5432]
+      services: [postgresql]
+    argv:
+      stealth: []
+      standard: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+      loud: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+
+  - id: py-oracle-tns
+    binary: python3
+    python_module: va_workspace.tools.oracle_tns
+    install_hint: "bundled"
+    min_intensity: standard
+    timeout_seconds: 12
+    output: services
+    match:
+      ports: [1521]
+      services: [oracle, oracle-tns]
+    argv:
+      stealth: []
+      standard: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]
+      loud: ["--host", "{host}", "--port", "{port}", "--out", "{outfile}"]

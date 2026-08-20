@@ -4,6 +4,20 @@ from pathlib import Path
 
 from va_workspace.core.portsplit import parse_ports_expr, ports_to_expr, split_ports
 from va_workspace.core.snap import capture_region, import_latest_picture
+from va_workspace.tools.smb_unauth import probe as smb_probe
+from va_workspace.tools.tls_versions import probe as tls_probe
+
+
+def test_smb_unauth_probe_handles_refused() -> None:
+    result = smb_probe("127.0.0.1", 1, timeout=0.3)
+    assert result["probe"] == "smb_unauth"
+    assert "error" in result or result["smb2"] == "no"
+
+
+def test_tls_probe_refused() -> None:
+    result = tls_probe("127.0.0.1", 1, timeout=0.3)
+    assert result["probe"] == "tls_versions"
+    assert result["legacy_tls"] == "no"
 
 
 def test_port_split() -> None:

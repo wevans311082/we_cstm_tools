@@ -32,6 +32,7 @@ class ToolMapping:
     argv: dict[str, list[str]] = field(default_factory=dict)
     wordlist_kind: str | None = None
     install_hint: str = ""
+    python_module: str | None = None
 
 
 def user_config_dir() -> Path:
@@ -82,6 +83,7 @@ def _parse_mapping(raw: dict[str, Any]) -> ToolMapping:
         argv=argv,
         wordlist_kind=raw.get("wordlist_kind"),
         install_hint=str(raw.get("install_hint", "")),
+        python_module=str(raw["python_module"]) if raw.get("python_module") else None,
     )
 
 

@@ -190,6 +190,76 @@ rules:
     pattern: "(?i)ipmi: open"
     title: "IPMI exposed"
     template: ipmi-cipher-zero
+  - id: va-kdc
+    script: va-kerberos-info
+    pattern: "(?i)kdc: open"
+    title: "Kerberos KDC exposed"
+    template: ldap-anon
+  - id: va-rpc
+    script: va-rpc-135
+    pattern: "(?i)endpoint_mapper: open"
+    title: "RPC endpoint mapper exposed"
+    template: rdp-exposed
+  - id: va-adws
+    script: va-adws
+    pattern: "(?i)adws: open"
+    title: "ADWS exposed"
+    template: ldap-anon
+  - id: va-vpn
+    script: va-vpn-portals
+    pattern: "(?i)portal: yes"
+    title: "SSL VPN portal"
+    template: vpn-portal
+  - id: va-k8s
+    script: va-k8s-apiserver
+    pattern: "(?i)anonymous_version: yes"
+    title: "Kubernetes apiserver anonymous"
+    template: kubelet-anon
+  - id: va-vsphere
+    script: va-vsphere
+    pattern: "(?i)vsphere: yes"
+    title: "vSphere/ESXi web"
+    template: vpn-portal
+  - id: va-etcd
+    script: va-etcd
+    pattern: "(?i)unauth: yes"
+    title: "etcd unauthenticated"
+    template: kubelet-anon
+  - id: va-consul
+    script: va-consul
+    pattern: "(?i)unauth: yes"
+    title: "Consul unauthenticated"
+    template: kubelet-anon
+  - id: va-es
+    script: va-elasticsearch
+    pattern: "(?i)unauth: yes"
+    title: "Elasticsearch unauthenticated"
+    template: redis-unauth
+  - id: va-proxy
+    script: va-http-open-proxy
+    pattern: "(?i)open_proxy: yes"
+    title: "Open HTTP proxy"
+    template: open-proxy
+  - id: va-listing
+    script: va-http-dirlisting
+    pattern: "(?i)dirlisting: yes"
+    title: "HTTP directory listing"
+    template: dirlisting
+  - id: va-winbox
+    script: va-mikrotik-winbox
+    pattern: "(?i)winbox: open"
+    title: "MikroTik WinBox"
+    template: cisco-smart-install
+  - id: va-jetdirect
+    script: va-jetdirect
+    pattern: "(?i)printing: open"
+    title: "Print service exposed"
+    template: telnet-clear
+  - id: va-imap
+    script: va-imap-pop
+    pattern: "(?i)cleartext_auth: yes"
+    title: "IMAP/POP3 cleartext AUTH"
+    template: telnet-clear
   - id: ftp-anon
     script: ftp-anon
     pattern: "(?i)anonymous"

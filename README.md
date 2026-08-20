@@ -110,6 +110,8 @@ va nse list --mode check --intensity stealth
 
 `va scan` passes those absolute paths to `nmap --script` together with the stock pack for the intensity. Stock Nmap Lua still lives on Kali under `/usr/share/nmap/scripts/`.
 
+Python probes (SMB signing, TLS versions, VPN portals, LDAP anon, HTTP intel, Postgres, Oracle TNS) run from the same orchestrator via `python_module` so pipx’s interpreter is used, not a bare `python3` that cannot see the package.
+
 ## Layout
 
 See `SPEC.md` §7. Default vault root: `~/va-engagements/<client>-<date>/`.

@@ -103,13 +103,19 @@ def _run_one(
         job.status = JobStatus.SKIPPED
         job.skip_reason = "port no longer matches"
         return job
-    binary = which(tool.binary)
-    if binary is None:
-        job.status = JobStatus.SKIPPED
-        job.skip_reason = f"{tool.binary} not on PATH"
-        hint = f" ({tool.install_hint})" if tool.install_hint else ""
-        log.warn(f"{tool.id}: {job.skip_reason}{hint}")
-        return job
+    import sys
+
+    if tool.python_module:
+        binary_path = sys.executable
+    else:
+        found = which(tool.binary)
+        if found is None:
+            job.status = JobStatus.SKIPPED
+            job.skip_reason = f"{tool.binary} not on PATH"
+            hint = f" ({tool.install_hint})" if tool.install_hint else ""
+            log.warn(f"{tool.id}: {job.skip_reason}{hint}")
+            return job
+        binary_path = str(found)
 
     wordlist = None
     wordlist_loud = None
@@ -130,14 +136,18 @@ def _run_one(
     template = tool.argv.get(str(intensity), [])
     outfile = _outfile(state, host, tool, port)
     try:
-        argv = [str(binary), *interpolate_argv(
+        extra = interpolate_argv(
             template,
             host=host,
             port=port,
             outfile=outfile,
             wordlist=wordlist,
             wordlist_loud=wordlist_loud,
-        )]
+        )
+        if tool.python_module:
+            argv = [binary_path, "-m", tool.python_module, *extra]
+        else:
+            argv = [binary_path, *extra]
     except PluginError as exc:
         job.status = JobStatus.SKIPPED
         job.skip_reason = str(exc)

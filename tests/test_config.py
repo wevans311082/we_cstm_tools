@@ -27,7 +27,16 @@ def test_packaged_mappings_load() -> None:
         "testssl",
         "ike-scan",
         "netexec-ms17",
+        "py-smb-unauth",
+        "py-tls-versions",
+        "py-vpn-portals",
+        "py-ldap-anon",
+        "py-http-intel",
+        "py-postgres",
+        "py-oracle-tns",
     } <= ids
+    smb = next(t for t in tools if t.id == "py-smb-unauth")
+    assert smb.python_module == "va_workspace.tools.smb_unauth"
     ferox = next(t for t in tools if t.id == "feroxbuster")
     assert ferox.min_intensity is Intensity.STANDARD
     assert ferox.argv[str(Intensity.STEALTH)] == []

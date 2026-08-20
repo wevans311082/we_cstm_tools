@@ -262,3 +262,51 @@ templates:
     description: OWA/EWS/Autodiscover paths answered. This is a high-value internet mail surface.
     short_term: MFA; restrict legacy protocols; current CU/SU patching.
     strategic: Exchange Online or hardened published access with WAF.
+  vpn-portal:
+    title: SSL VPN or published remote-access portal
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: A FortiGate, GlobalProtect, Pulse, ASA, Citrix, or RD Web portal is reachable.
+    short_term: MFA; restrict to known source ranges; current firmware.
+    strategic: Conditional access / ZTNA instead of a flat VPN.
+  ldap-anon:
+    title: Anonymous LDAP bind permitted
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: The directory accepted an anonymous bind and/or served RootDSE data.
+    short_term: Disable anonymous bind; firewall 389/3268 to DCs only.
+    strategic: LDAP signing and channel binding; LDAPS only.
+  swagger:
+    title: OpenAPI or Swagger UI exposed
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: API schema is reachable without auth and maps the attack surface.
+    short_term: Unpublish swagger in production; require auth.
+    strategic: Schema only on internal developer networks.
+  graphql:
+    title: GraphQL introspection enabled
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: Introspection queries succeeded.
+    short_term: Disable introspection in production.
+    strategic: Persisted queries and authz on every field.
+  dirlisting:
+    title: HTTP directory listing enabled
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: Index of / style listing is enabled.
+    short_term: Disable autoindex; deploy a default document.
+    strategic: Web server baseline that forbids directory listing.
+  open-proxy:
+    title: Open HTTP proxy
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:L/I:L/A:N"
+    description: CONNECT to an external host returned 200.
+    short_term: Disable proxying; restrict to authenticated internal use.
+    strategic: Remove forward proxies from the internet.
+  postgres-trust:
+    title: PostgreSQL trust authentication
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    description: The server accepted a startup packet with trust (auth type 0).
+    short_term: Require scram/md5; pg_hba.conf; firewall 5432.
+    strategic: No internet-facing Postgres; IAM-style auth.
+  oracle-tns:
+    title: Oracle TNS listener exposed
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: TNS version/ping succeeded without a database login.
+    short_term: Restrict 1521; set a listener password; latest PSU.
+    strategic: Private DB network; TLS on TNS.

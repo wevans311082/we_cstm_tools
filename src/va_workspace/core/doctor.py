@@ -48,6 +48,8 @@ def collect_doctor() -> DoctorReport:
     names: list[tuple[str, bool]] = [(name, True) for name in REQUIRED_BINARIES]
     seen = {name for name, _ in names}
     for tool in tools:
+        if tool.python_module:
+            continue
         if tool.binary not in seen:
             names.append((tool.binary, False))
             seen.add(tool.binary)
