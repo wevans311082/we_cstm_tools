@@ -34,6 +34,10 @@ INSTALL_HINTS: dict[str, str] = {
     "ldapsearch": "sudo apt install ldap-utils",
     "testssl.sh": "sudo apt install testssl.sh",
     "ike-scan": "sudo apt install ike-scan",
+    "maim": "sudo apt install maim xclip",
+    "grim": "sudo apt install grim slurp wl-clipboard",
+    "xclip": "sudo apt install xclip",
+    "notify-send": "sudo apt install libnotify-bin",
 }
 
 SECLISTS_WEB_SMALL: tuple[Path, ...] = (

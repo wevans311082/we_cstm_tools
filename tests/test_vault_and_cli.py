@@ -98,6 +98,7 @@ def test_init(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout + result.stderr
     assert (out / "rules-of-engagement.md").is_file()
+    assert (out / "08-pre-engagement" / "checklist.md").is_file()
     cover = (out / "00-report" / "01-cover-and-people.md").read_text(encoding="utf-8")
     assert "Wayne" in cover
 

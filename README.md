@@ -76,6 +76,29 @@ uv run va ingest tests/fixtures/nmap/mixed-lab.xml --out $env:TEMP\va-demo --cli
 
 Live `va scan` requires Kali/Linux.
 
+## Evidence snapper (from ca_misc_scripts)
+
+Old `scrptn.py` / `grab` live here as `va snap` and `va grab`.
+
+Bugs fixed: Esc/cancel is no longer a crash; overlapping hotkeys are locked; Wayland (`grim`+`slurp`) as well as X11 (`maim`); `notify-send` cannot fail the save; files go into the **engagement vault** with Obsidian wikilinks.
+
+```text
+cd ~/va-engagements/acme-2026-04-01
+va snap                     # select a region, save + clipboard + diary
+va snap --listen            # Ctrl+Alt+S daemon (needs: pipx inject va-workspace pynput)
+va snap --name login --host 10.10.10.5
+va grab login_page          # import newest ~/Pictures image
+sudo apt install maim xclip libnotify-bin   # X11 Kali
+```
+
+## Operator notes (CSTM catalogue)
+
+```text
+va notes list
+va notes show 01
+va notes show nmap
+```
+
 ## Custom NSE (Lua)
 
 The Lua files are in the package: `src/va_workspace/nse/va-*.nse`. They are **ours**, not copies of `/usr/share/nmap/scripts`.

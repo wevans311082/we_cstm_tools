@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ssl
 import sys
 from pathlib import Path
 
@@ -121,6 +122,11 @@ def doctor() -> None:
     nse_files = list_custom_nse()
     log.info(f"loaded {report.mapping_count} tool mapping(s)")
     log.info(f"custom NSE Lua: {len(nse_files)} script(s) in {packaged_nse_dir()}")
+    from va_workspace.core.snap import detect_capture_backend, detect_clipboard_backend
+
+    snap_b = detect_capture_backend() or "missing (apt install maim  or grim+slurp)"
+    clip_b = detect_clipboard_backend() or "missing (xclip or wl-copy)"
+    log.info(f"screenshot backend: {snap_b}; clipboard: {clip_b}")
     if not sys.platform.startswith("linux"):
         log.warn("this OS is fine for ingest/tests; live va scan requires Kali/Linux")
     if report.required_missing:
@@ -449,6 +455,138 @@ def note(
     with diary.open("a", encoding="utf-8") as handle:
         handle.write(f"- {utc_now()} {line}\n")
     log.success(f"noted → {diary}")
+
+
+@app.command()
+def snap(
+    listen: bool = typer.Option(False, "--listen", help="Hotkey daemon (Ctrl+Alt+S)"),
+    name: str | None = typer.Option(None, "--name", help="Caption / filename slug"),
+    host: str | None = typer.Option(None, "--host", help="Save under 02-hosts/<ip>/evidence"),
+    hotkey: str = typer.Option("<ctrl>+<alt>+s", "--hotkey"),
+    no_clip: bool = typer.Option(False, "--no-clip"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Region screenshot into the vault (fixed Evidence Snapper)."""
+    from va_workspace.core.snap import capture_region, listen_hotkey, resolve_vault
+
+    path = resolve_vault(out)
+    if path is None:
+        log.error("not an engagement directory (cd into the vault or pass --out)")
+        raise typer.Exit(code=2)
+    if listen:
+        try:
+            listen_hotkey(path, hotkey)
+        except RuntimeError as exc:
+            log.error(str(exc))
+            raise typer.Exit(code=1) from exc
+        except KeyboardInterrupt:
+            log.info("stopped")
+        return
+    result = capture_region(
+        engagement=path, name=name, host=host, clipboard=not no_clip
+    )
+    if result.status == "ok":
+        log.success(result.message)
+    elif result.status == "cancel":
+        log.warn("cancelled")
+        raise typer.Exit(code=0)
+    else:
+        log.error(result.message)
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def grab(
+    name: str | None = typer.Argument(None, help="Caption for the imported image"),
+    host: str | None = typer.Option(None, "--host"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Import the newest image from ~/Pictures into the vault (old `grab` helper)."""
+    from va_workspace.core.snap import import_latest_picture, resolve_vault
+
+    path = resolve_vault(out)
+    if path is None:
+        log.error("not an engagement directory")
+        raise typer.Exit(code=2)
+    result = import_latest_picture(engagement=path, name=name, host=host)
+    if result.status != "ok":
+        log.error(result.message)
+        raise typer.Exit(code=1)
+    log.success(result.message)
+
+
+@app.command()
+def cert(
+    host: str = typer.Argument(..., help="Hostname or IP"),
+    port: int = typer.Argument(443),
+) -> None:
+    """Show a remote TLS certificate (stdlib; works on Windows)."""
+    from va_workspace.core.certinfo import fetch_cert
+
+    try:
+        info = fetch_cert(host, port)
+    except (OSError, TimeoutError, RuntimeError, ssl.SSLError, ValueError) as exc:
+        log.error(str(exc))
+        raise typer.Exit(code=1) from exc
+    table = Table(title=f"{host}:{port}")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("subject", info["subject"])
+    table.add_row("issuer", info["issuer"])
+    table.add_row("not_before", info["not_before"])
+    table.add_row("not_after", info["not_after"])
+    table.add_row("expired", str(info["expired"]))
+    table.add_row("SANs", ", ".join(info["sans"]) or "-")
+    out_console.print(table)
+
+
+@app.command("split-ports")
+def split_ports_cmd(
+    expr: str = typer.Argument(..., help="Nmap port expr, e.g. 1-65535 or 80,443,8000-8100"),
+    parts: int = typer.Option(4, "-S", "--split", min=1, max=64),
+) -> None:
+    """Split a port range into N chunks (old nsplit.py)."""
+    from va_workspace.core.portsplit import split_ports
+
+    try:
+        chunks = split_ports(expr, parts)
+    except ValueError as exc:
+        log.error(str(exc))
+        raise typer.Exit(code=2) from exc
+    for i, chunk in enumerate(chunks, start=1):
+        out_console.print(f"{i}/{len(chunks)}  -p {chunk}")
+
+
+notes_app = typer.Typer(
+    no_args_is_help=True, help="CSTM/CHECK operator notes from ca_misc_scripts."
+)
+app.add_typer(notes_app, name="notes")
+
+
+@notes_app.command("list")
+def notes_list() -> None:
+    """List packaged operator notes."""
+    from va_workspace.core.notes import list_notes, notes_dir
+
+    files = list_notes()
+    if not files:
+        log.warn(f"no notes in {notes_dir()}")
+        raise typer.Exit(code=1)
+    for path in files:
+        out_console.print(path.name)
+
+
+@notes_app.command("show")
+def notes_show(name: str = typer.Argument(..., help="Filename or unique substring")) -> None:
+    """Print a packaged operator note."""
+    from va_workspace.core.notes import read_note
+
+    try:
+        path = read_note(name)
+    except FileNotFoundError as exc:
+        log.error(str(exc))
+        raise typer.Exit(code=2) from exc
+    out_console.print(path.read_text(encoding="utf-8"))
 
 
 def _show_legal(state: object) -> None:

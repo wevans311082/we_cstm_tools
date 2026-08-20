@@ -89,7 +89,9 @@ def ensure_tree(state: EngagementState) -> None:
         "04-leads",
         "05-raw/nmap",
         "05-raw/tools",
-        "06-logs",
+        "06-logs/screenshots",
+        "08-pre-engagement",
+        "09-attachments/screenshots",
         ".obsidian",
     ):
         (root / relative).mkdir(parents=True, exist_ok=True)
@@ -108,6 +110,11 @@ def write_operator_docs(state: EngagementState, *, force: bool = False) -> None:
     _write(
         state.path / "rules-of-engagement.md",
         render("roe.md.j2", **ctx),
+        overwrite=force,
+    )
+    _write(
+        state.path / "08-pre-engagement" / "checklist.md",
+        render("pre_engagement.md.j2", **ctx),
         overwrite=force,
     )
     for name in REPORT_FILES:
