@@ -30,6 +30,10 @@ INSTALL_HINTS: dict[str, str] = {
     "onesixtyone": "sudo apt install onesixtyone",
     "snmpwalk": "sudo apt install snmp",
     "searchsploit": "sudo apt install exploitdb",
+    "enum4linux-ng": "sudo apt install enum4linux-ng",
+    "ldapsearch": "sudo apt install ldap-utils",
+    "testssl.sh": "sudo apt install testssl.sh",
+    "ike-scan": "sudo apt install ike-scan",
 }
 
 SECLISTS_WEB_SMALL: tuple[Path, ...] = (
@@ -101,3 +105,62 @@ PROFILE_DELAY_SECONDS: dict[Intensity, float] = {
     Intensity.STANDARD: 0.2,
     Intensity.LOUD: 0.0,
 }
+
+PROFILE_MAX_RATE: dict[Intensity, int] = {
+    Intensity.STEALTH: 300,
+    Intensity.STANDARD: 1000,
+    Intensity.LOUD: 5000,
+}
+
+PROFILE_MAX_RETRIES: dict[Intensity, int] = {
+    Intensity.STEALTH: 2,
+    Intensity.STANDARD: 2,
+    Intensity.LOUD: 3,
+}
+
+SCRIPT_TIMEOUT = "30s"
+
+INTERESTING_PORTS: frozenset[int] = frozenset(
+    {
+        21,
+        23,
+        25,
+        53,
+        69,
+        88,
+        111,
+        135,
+        137,
+        139,
+        161,
+        389,
+        445,
+        500,
+        502,
+        623,
+        1433,
+        1521,
+        1723,
+        2049,
+        2375,
+        3306,
+        3389,
+        4786,
+        5432,
+        5555,
+        5601,
+        5672,
+        5900,
+        5985,
+        6379,
+        6443,
+        8009,
+        8291,
+        8443,
+        9200,
+        10250,
+        11211,
+        27017,
+        50070,
+    }
+)

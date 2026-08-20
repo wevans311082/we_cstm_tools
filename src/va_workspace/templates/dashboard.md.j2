@@ -30,3 +30,14 @@ SORT cvss_score DESC
 ```dataview
 LIST FROM "04-leads"
 ```
+
+## Hosts by role
+
+```dataview
+TABLE role, hostname, open_ports
+FROM "02-hosts"
+WHERE contains(file.tags, "host")
+SORT role ASC
+```
+
+Also see [[01-overview/attack-surface]], [[01-overview/tls]], [[01-overview/smb]], [[01-overview/certs]].

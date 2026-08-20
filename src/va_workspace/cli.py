@@ -11,6 +11,7 @@ from rich.table import Table
 from va_workspace import __version__
 from va_workspace.config.profiles import intensity_or_default
 from va_workspace.constants import FindingStatus, Intensity, JobStatus, Mode
+from va_workspace.core.compare import write_compare
 from va_workspace.core.cvss import CvssError
 from va_workspace.core.doctor import collect_doctor
 from va_workspace.core.engagement import (
@@ -22,7 +23,8 @@ from va_workspace.core.engagement import (
 from va_workspace.core.findings import add_finding, parse_finding_frontmatter
 from va_workspace.core.nmap_runner import ScanPlatformError
 from va_workspace.core.pipeline import ingest_xml, run_enum, run_scan
-from va_workspace.core.state import try_load_state
+from va_workspace.core.state import save_state, try_load_state, utc_now
+from va_workspace.core.templates import load_finding_templates
 from va_workspace.core.vault import list_finding_files
 from va_workspace.util import log
 from va_workspace.util.log import stdout as out_console
@@ -145,6 +147,7 @@ def scan(
     ),
     client: str = typer.Option("", "--client"),
     no_enum: bool = typer.Option(False, "--no-enum", help="Skip secondary tools after Nmap"),
+    pn: bool = typer.Option(False, "--pn", help="Skip host discovery (-Pn)"),
 ) -> None:
     """Live Nmap (Linux) then vault + secondary enum. Resume-aware."""
     cwd = Path.cwd()
@@ -177,19 +180,13 @@ def scan(
     maybe_warn_check_metadata(state)
     _show_legal(state)
     try:
-        if not no_enum:
-            run_scan(state, extra, resume=resume)
-        else:
-            from va_workspace.constants import NmapPhase
-            from va_workspace.core.nmap_runner import nmap_output_stem, run_nmap
-            from va_workspace.core.pipeline import ingest_xml
-
-            xml_path = Path(str(nmap_output_stem(state.path)) + ".xml")
-            if resume and state.nmap.status == NmapPhase.COMPLETE and xml_path.is_file():
-                ingest_xml(state, xml_path, copy_raw=False)
-            else:
-                xml_path = run_nmap(state, extra)
-                ingest_xml(state, xml_path, copy_raw=False)
+        run_scan(
+            state,
+            extra,
+            resume=resume,
+            skip_host_discovery=pn,
+            enum=not no_enum,
+        )
     except ScanPlatformError as exc:
         log.error(str(exc))
         raise typer.Exit(code=2) from exc
@@ -269,6 +266,11 @@ def status(
     table.add_row("mode", str(state.mode))
     table.add_row("intensity", str(state.intensity))
     table.add_row("nmap", str(state.nmap.status))
+    table.add_row(
+        "nmap phases",
+        f"disc={state.nmap.discovery} tcp={state.nmap.tcp} "
+        f"udp={state.nmap.udp} nse={state.nmap.scripts}",
+    )
     table.add_row("hosts", str(len(state.hosts)))
     table.add_row("jobs", str(len(state.jobs)))
     table.add_row(
@@ -280,10 +282,23 @@ def status(
     out_console.print(table)
 
 
+@finding_app.command("templates")
+def finding_templates() -> None:
+    """List finding templates."""
+    table = Table(title="Finding templates")
+    table.add_column("ID")
+    table.add_column("Title")
+    table.add_column("CVSS")
+    for tmpl in load_finding_templates().values():
+        table.add_row(tmpl.id, tmpl.title, tmpl.cvss)
+    out_console.print(table)
+
+
 @finding_app.command("add")
 def finding_add(
-    title: str = typer.Option(..., "--title"),
-    cvss: str = typer.Option(..., "--cvss", help="CVSS:3.1/AV:N/AC:L/... vector"),
+    title: str | None = typer.Option(None, "--title"),
+    cvss: str | None = typer.Option(None, "--cvss", help="CVSS:3.1/AV:N/AC:L/... vector"),
+    template: str | None = typer.Option(None, "--template", help="Template id"),
     hosts: list[str] = typer.Option([], "--hosts"),
     ports: list[str] = typer.Option([], "--ports"),
     description: str = typer.Option("", "--description"),
@@ -302,11 +317,14 @@ def finding_add(
     if state is None:
         log.error("no state.json")
         raise typer.Exit(code=1)
+    if not template and (not title or not cvss):
+        log.error("provide --template or both --title and --cvss")
+        raise typer.Exit(code=2)
     try:
         finding, dest = add_finding(
             state,
-            title=title,
-            cvss_vector=cvss,
+            title=title or "",
+            cvss_vector=cvss or "",
             hosts=list(hosts),
             ports=list(ports),
             description=description,
@@ -314,8 +332,9 @@ def finding_add(
             strategic_fix=strategic,
             evidence=list(evidence),
             status=status,
+            template_id=template or "",
         )
-    except CvssError as exc:
+    except (CvssError, KeyError) as exc:
         log.error(str(exc))
         raise typer.Exit(code=2) from exc
     from va_workspace.core.vault import write_operator_docs
@@ -359,8 +378,44 @@ def finding_list(
     out_console.print(table)
 
 
+@app.command()
+def compare(
+    other: Path = typer.Argument(..., exists=True, file_okay=False),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Diff hosts/ports against another engagement vault (retest)."""
+    path = resolve_engagement_dir(out, Path.cwd())
+    if path is None:
+        log.error("not an engagement directory")
+        raise typer.Exit(code=2)
+    current = try_load_state(path)
+    previous = try_load_state(other)
+    if current is None or previous is None:
+        log.error("both vaults need state.json")
+        raise typer.Exit(code=1)
+    write_compare(current, previous)
+    log.success(f"wrote {current.path / '01-overview' / 'retest-diff.md'}")
+
+
+@app.command()
+def note(
+    text: list[str] = typer.Argument(..., help="Diary line"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Append a tester diary line (feeds methodology breadcrumbs)."""
+    path = resolve_engagement_dir(out, Path.cwd())
+    if path is None:
+        log.error("not an engagement directory")
+        raise typer.Exit(code=2)
+    diary = path / "06-logs" / "diary.md"
+    diary.parent.mkdir(parents=True, exist_ok=True)
+    line = " ".join(text).strip()
+    with diary.open("a", encoding="utf-8") as handle:
+        handle.write(f"- {utc_now()} {line}\n")
+    log.success(f"noted → {diary}")
+
+
 def _show_legal(state: object) -> None:
-    from va_workspace.core.state import save_state
     from va_workspace.models import EngagementState
 
     assert isinstance(state, EngagementState)

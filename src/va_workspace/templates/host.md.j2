@@ -4,16 +4,19 @@ ip: "{{ host.ip }}"
 hostname: "{{ host.primary_hostname }}"
 os: "{{ host.os }}"
 status: "{{ host.status }}"
+role: "{{ host.role }}"
 open_ports: [{% for p in host.open_port_numbers %}{{ p }}{% if not loop.last %}, {% endif %}{% endfor %}]
 services: [{% for s in host.service_names %}"{{ s }}"{% if not loop.last %}, {% endif %}{% endfor %}]
 tags:
   - host
   - {{ mode }}
+  - role/{{ host.role }}
 ---
 
 # {{ host.ip }}{% if host.primary_hostname %} — {{ host.primary_hostname }}{% endif %}
 
 Status: `{{ host.status }}`  
+Role: `{{ host.role }}`  
 OS: {{ host.os or "_unknown_" }}  
 Hostnames: {% if host.hostnames %}{{ host.hostnames | join(", ") }}{% else %}_none_{% endif %}
 
@@ -35,7 +38,7 @@ Hostnames: {% if host.hostnames %}{{ host.hostnames | join(", ") }}{% else %}_no
 ### {{ s.id }}
 
 ```
-{{ s.output }}
+{{ s.output | clip }}
 ```
 {% endfor %}
 {% else %}
@@ -49,7 +52,7 @@ _No host scripts._
 #### {{ s.id }}
 
 ```
-{{ s.output }}
+{{ s.output | clip }}
 ```
 {% endfor %}
 {% endfor %}

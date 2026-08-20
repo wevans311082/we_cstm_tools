@@ -39,7 +39,17 @@ def add_finding(
     strategic_fix: str = "",
     evidence: list[str] | None = None,
     status: FindingStatus = FindingStatus.DRAFT,
+    template_id: str = "",
 ) -> tuple[Finding, Path]:
+    if template_id:
+        from va_workspace.core.templates import get_template
+
+        tmpl = get_template(template_id)
+        title = title or tmpl.title
+        cvss_vector = cvss_vector or tmpl.cvss
+        description = description or tmpl.description
+        short_term_fix = short_term_fix or tmpl.short_term
+        strategic_fix = strategic_fix or tmpl.strategic
     score = base_score(cvss_vector)
     finding = Finding(
         id=next_finding_id(state),

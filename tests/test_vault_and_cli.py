@@ -32,8 +32,15 @@ def test_ingest_and_finding(tmp_path: Path, nmap_xml: Path) -> None:
     text = host_note.read_text(encoding="utf-8")
     assert MANAGED_HEADER in text
     assert "10.10.10.5" in text
+    assert "domain-controller" in text
     assert (out / "01-overview" / "network.canvas").is_file()
     assert (out / "01-overview" / "attachments" / "services-bar.png").is_file()
+    assert (out / "01-overview" / "attack-surface.md").is_file()
+    assert (out / "01-overview" / "tls.md").is_file()
+    assert (out / "01-overview" / "smb.md").is_file()
+    assert (out / "01-overview" / "certs.md").is_file()
+    leads = list((out / "04-leads").glob("nse-*.md"))
+    assert leads
     dashboard = (out / "01-overview" / "dashboard.md").read_text(encoding="utf-8")
     assert "dataview" in dashboard
 
@@ -67,6 +74,14 @@ def test_ingest_and_finding(tmp_path: Path, nmap_xml: Path) -> None:
     assert "F-001" in listed.stdout
     listed_l = listed.stdout.lower()
     assert str(score) in listed.stdout or "medium" in listed_l or "low" in listed_l
+
+    templated = runner.invoke(
+        app,
+        ["finding", "add", "--out", str(out), "--template", "smb-signing", "--hosts", "10.10.10.5"],
+    )
+    assert templated.exit_code == 0, templated.stdout + templated.stderr
+    listed2 = runner.invoke(app, ["finding", "list", "--out", str(out)])
+    assert "F-002" in listed2.stdout
 
     status = runner.invoke(app, ["status", "--out", str(out)])
     assert status.exit_code == 0

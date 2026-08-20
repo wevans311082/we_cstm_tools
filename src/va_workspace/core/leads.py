@@ -22,10 +22,15 @@ def _query(port: Port) -> str | None:
 
 
 def write_leads(state: EngagementState) -> int:
+    from va_workspace.core.nse_leads import write_nse_leads
+
+    nse_count = write_nse_leads(state)
+    if nse_count:
+        log.info(f"wrote {nse_count} NSE lead note(s)")
     binary = which("searchsploit")
     if binary is None:
-        log.warn("searchsploit not on PATH — skipping leads (sudo apt install exploitdb)")
-        return 0
+        log.warn("searchsploit not on PATH — skipping exploit leads (sudo apt install exploitdb)")
+        return nse_count
     written = 0
     for host in state.hosts:
         for port in host.open_ports:
@@ -56,11 +61,12 @@ def write_leads(state: EngagementState) -> int:
                     protocol=port.protocol,
                     body=pretty,
                     mode=str(state.mode),
+                    template="",
                 ),
                 encoding="utf-8",
             )
             written += 1
-    return written
+    return nse_count + written
 
 
 def _lead_path(state: EngagementState, host: Host, port: Port) -> Path:

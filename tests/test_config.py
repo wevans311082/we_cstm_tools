@@ -22,6 +22,11 @@ def test_packaged_mappings_load() -> None:
         "netexec-winrm",
         "onesixtyone",
         "snmpwalk",
+        "enum4linux-ng",
+        "ldapsearch",
+        "testssl",
+        "ike-scan",
+        "netexec-ms17",
     } <= ids
     ferox = next(t for t in tools if t.id == "feroxbuster")
     assert ferox.min_intensity is Intensity.STANDARD
@@ -66,6 +71,8 @@ def test_nmap_fallback_unprivileged() -> None:
     assert "--exclude" in argv
     assert "-oA" in argv
     assert "--max-retries" in argv
+    assert "--max-rate" in argv
+    assert "--reason" in argv
     assert any("connect" in n for n in notes)
 
 

@@ -1,0 +1,210 @@
+# Operator finding templates. CVSS 3.1 base; override per engagement.
+templates:
+  smb-signing:
+    title: SMB signing not required
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N"
+    description: >
+      The SMB service does not require message signing. An attacker on the
+      network path can tamper with SMB traffic (relay / MITM). Confirm with
+      NetExec or smbclient and capture evidence before publishing.
+    short_term: Require SMB signing via GPO on affected hosts; restrict 445 to management networks.
+    strategic: Enable SMB signing (always) via GPO domain-wide and retire SMBv1.
+  smbv1:
+    title: SMBv1 protocol enabled
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    description: >
+      SMBv1 is offered. This dialect is obsolete and associated with wormable
+      flaws (MS17-010). Verify the dialect list and whether v1 is actually used.
+    short_term: Block SMBv1 at the host firewall / disable the feature; monitor for remaining clients.
+    strategic: Disable SMBv1 organisation-wide and remediate legacy appliances that still require it.
+  ms17-010:
+    title: MS17-010 (EternalBlue) indicated
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"
+    description: >
+      NSE reported the host as vulnerable to MS17-010. This is a script check,
+      not a confirmed exploit. Reproduce with a safe scanner module and patch evidence.
+    short_term: Isolate the host; apply the MS17-010 security update; disable SMBv1.
+    strategic: Patch management covering all Windows builds; network segmentation of SMB.
+  smb-null:
+    title: Unauthenticated SMB share access
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: >
+      Null or guest sessions enumerated SMB shares. Confirm share list and
+      whether any share is writable or contains sensitive data.
+    short_term: Disable null/guest sessions; remove leftover shares; restrict 445.
+    strategic: Hardening GPO; regular share reviews; least-privilege ACLs.
+  weak-ciphers:
+    title: Weak TLS protocol or cipher suites
+    cvss: "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N"
+    description: >
+      The TLS service offers obsolete protocols (SSLv3/TLS 1.0) or weak ciphers
+      (RC4, 3DES, NULL, export). Confirm with sslscan or testssl.sh and list
+      the exact suites in evidence.
+    short_term: Disable SSLv3 and TLS 1.0/1.1; remove RC4/3DES/NULL suites on the load balancer or host.
+    strategic: TLS 1.2+ only with modern AEAD ciphers; automated configuration baselines.
+  tls10:
+    title: TLS 1.0 or SSLv3 accepted
+    cvss: "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: The service accepts TLS 1.0 and/or SSLv3. These protocols are deprecated.
+    short_term: Disable TLS 1.0/SSLv3 on the affected listener.
+    strategic: Organisation-wide TLS 1.2 minimum; PCI/NCSC aligned cipher policy.
+  expired-cert:
+    title: Certificate problem (expiry, names, or key)
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+    description: >
+      The presented X.509 certificate is expired, mismatched, contains internal
+      names, or uses a weak key. Copy the PEM/ssl-cert output into evidence.
+    short_term: Replace the certificate; restrict internal names on internet-facing certs.
+    strategic: Centralised certificate lifecycle with expiry monitoring.
+  heartbleed:
+    title: Heartbleed indicated
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+    description: NSE reported CVE-2014-0160. Verify with a dedicated Heartbleed check before reporting.
+    short_term: Patch OpenSSL; rotate keys and session tickets that may have leaked.
+    strategic: Keep TLS libraries in the patch cycle; disable vulnerable stacks.
+  missing-hsts:
+    title: Missing HTTP security headers
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N"
+    description: >
+      Security headers such as Strict-Transport-Security, Content-Security-Policy,
+      or cookie flags are missing or incomplete. Confirm with curl -I.
+    short_term: Add HSTS (once HTTPS is solid), secure cookie flags, and a baseline CSP.
+    strategic: Header policy as code on the reverse proxy for all public apps.
+  cookie-flags:
+    title: Insecure cookie flags
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N"
+    description: Session cookies missing Secure and/or HttpOnly.
+    short_term: Set Secure; HttpOnly; SameSite on session cookies.
+    strategic: Framework defaults so new apps inherit the flags.
+  http-trace:
+    title: HTTP TRACE method enabled
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:N/A:N"
+    description: TRACE is enabled and can assist cross-site tracing attacks.
+    short_term: Disable TRACE on the web server and load balancer.
+    strategic: Baseline that only GET/HEAD/POST (and required APIs) are permitted.
+  http-methods:
+    title: Dangerous HTTP methods enabled
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N"
+    description: PUT, DELETE, CONNECT, or TRACE are advertised. Confirm whether they are actually usable.
+    short_term: Restrict methods at the reverse proxy; disable unused WebDAV.
+    strategic: Method allow-list per application.
+  git-exposed:
+    title: Git metadata reachable
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: /.git or similar is reachable and may leak source or credentials.
+    short_term: Block /.git at the web server; rotate any secrets in the history that was exposed.
+    strategic: Deployment pipeline that never publishes VCS metadata.
+  webdav:
+    title: WebDAV enabled
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N"
+    description: WebDAV methods are available. Confirm authentication and PUT/MOVE.
+    short_term: Disable WebDAV unless required; enforce authz.
+    strategic: Remove WebDAV from internet-facing vhosts.
+  ftp-anon:
+    title: Anonymous FTP
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: Anonymous FTP login succeeded. List directories and check for sensitive files or write access.
+    short_term: Disable anonymous FTP; move files to authenticated storage.
+    strategic: Decommission FTP in favour of SFTP/HTTPS.
+  snmp-public:
+    title: SNMP information disclosure
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: SNMP responded to a well-known community and leaked system or user data.
+    short_term: Change communities; restrict UDP/161 to management subnets; prefer SNMPv3.
+    strategic: SNMPv3-only with unique credentials; no default public/private.
+  nfs-export:
+    title: NFS exports visible
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: showmount listed NFS exports. Confirm whether they are world-mountable.
+    short_term: Restrict exports to known clients; drop NFS from untrusted networks.
+    strategic: Kerberos NFS or replacement with SMB/HTTPS with authz.
+  open-resolver:
+    title: DNS recursion enabled
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+    description: The resolver answers recursive queries and can be abused for amplification.
+    short_term: Disable recursion for untrusted sources; rate-limit.
+    strategic: Split-horizon DNS; recursive resolvers only on internal networks.
+  axfr:
+    title: DNS zone transfer allowed
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: AXFR succeeded and disclosed zone data.
+    short_term: Restrict AXFR to secondaries by TSIG/IP allow-list.
+    strategic: Hide internal records from public views.
+  ntp-monlist:
+    title: NTP monlist enabled
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:L"
+    description: NTP monlist (or equivalent) is enabled and can leak clients or be used in amplification.
+    short_term: Disable monlist; upgrade ntpd; restrict UDP/123.
+    strategic: Chrony/NTPsec with hardened defaults.
+  redis-unauth:
+    title: Redis without authentication
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    description: Redis INFO succeeded without AUTH. Confirm bind address and protected-mode.
+    short_term: Bind to localhost/VPN; require AUTH; firewall 6379.
+    strategic: Managed Redis with TLS and IAM-style auth.
+  mongo-unauth:
+    title: MongoDB without authentication
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    description: MongoDB listed databases without credentials.
+    short_term: Enable auth; bind to internal interfaces; firewall 27017.
+    strategic: Mongo with auth + TLS + network policy.
+  blank-sa:
+    title: MSSQL blank sa password
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    description: sa accepted an empty password. Do not dump data in a CHECK unless RoE allows.
+    short_term: Set a strong sa password or disable sa; restrict 1433.
+    strategic: Windows auth; no SQL auth for sa; least privilege.
+  mysql-blank:
+    title: MySQL empty password
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    description: A MySQL account accepted an empty password.
+    short_term: Set passwords; remove anonymous accounts; bind-address.
+    strategic: Privilege review; TLS; no internet-facing 3306.
+  ipmi-cipher-zero:
+    title: IPMI cipher zero
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"
+    description: BMC accepts IPMI cipher 0 (no auth). Out-of-band compromise risk.
+    short_term: Disable cipher 0; isolate IPMI to a dedicated management network.
+    strategic: Modern BMC firmware; 802.1X on management; no shared BMC VLAN with users.
+  rdp-exposed:
+    title: RDP exposed with NTLM info leak
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: RDP is reachable and discloses NetBIOS/DNS/domain via NTLM. Confirm NLA and exposure.
+    short_term: Restrict 3389 to jump hosts/VPN; enable NLA.
+    strategic: No direct RDP from untrusted networks; privileged access workstation pattern.
+  ssh-weak:
+    title: Weak SSH algorithms
+    cvss: "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N"
+    description: SSH offers legacy host keys or ciphers (ssh-rsa, 3DES, arcfour, group1).
+    short_term: Disable ssh-rsa/3DES/arcfour; use ed25519/rsa-sha2 and modern kex.
+    strategic: sshd_config baseline via config management.
+  x11-open:
+    title: X11 open access
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N"
+    description: X11 appears to grant access without authentication.
+    short_term: Disable remote X11; use SSH forwarding if needed.
+    strategic: No listen on :6000 from untrusted networks.
+  rsync-open:
+    title: Rsync modules listed without auth
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: rsync listed modules. Confirm whether they are readable/writable.
+    short_term: Require secrets; bind rsync to management nets.
+    strategic: Replace with authenticated artefact storage.
+  winrm-exposed:
+    title: WinRM exposed
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: WinRM (5985/5986) is reachable. Unauth check only in v1; still an attack surface.
+    short_term: Restrict to jump hosts; HTTPS only.
+    strategic: Privileged access path; no WinRM on the internet.
+  cisco-smart-install:
+    title: Cisco Smart Install reachable
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"
+    description: TCP/4786 (Smart Install) is open. This protocol has a history of unauth abuse.
+    short_term: Disable Smart Install (no vstack); ACL 4786.
+    strategic: Current IOS/IOS-XE; management-plane protection.
+  internal-ip:
+    title: Internal IP address disclosed
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: HTTP headers or redirects exposed an RFC1918 address.
+    short_term: Strip internal IPs from headers/errors on the reverse proxy.
+    strategic: Standardised error pages; header allow-list.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Any
 
 from va_workspace.models import Host, NseScript, Port
 
@@ -18,13 +19,38 @@ def _text(element: ET.Element | None, attr: str, default: str = "") -> str:
     return element.get(attr, default) or default
 
 
+def _script_data(element: ET.Element) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    unnamed: list[Any] = []
+    for child in list(element):
+        if child.tag == "elem":
+            key = child.get("key")
+            value = (child.text or "").strip()
+            if key:
+                result[key] = value
+            else:
+                unnamed.append(value)
+        elif child.tag == "table":
+            key = child.get("key")
+            parsed = _script_data(child)
+            if key:
+                result[key] = parsed
+            else:
+                unnamed.append(parsed)
+    if unnamed:
+        result["_items"] = unnamed
+    return result
+
+
 def _scripts(parent: ET.Element) -> list[NseScript]:
     results: list[NseScript] = []
     for script in parent.findall("script"):
         script_id = script.get("id") or ""
         output = script.get("output") or ""
         if script_id:
-            results.append(NseScript(id=script_id, output=output.strip()))
+            results.append(
+                NseScript(id=script_id, output=output.strip(), data=_script_data(script))
+            )
     return results
 
 
@@ -95,3 +121,58 @@ def parse_nmap_xml(path: Path) -> list[Host]:
             )
         )
     return hosts
+
+
+def merge_hosts(*groups: list[Host]) -> list[Host]:
+    """Merge hosts from several Nmap XML parses (tcp / udp / scripts)."""
+    by_ip: dict[str, Host] = {}
+    order: list[str] = []
+    for group in groups:
+        for host in group:
+            if host.ip not in by_ip:
+                by_ip[host.ip] = Host(
+                    ip=host.ip,
+                    status=host.status,
+                    hostnames=list(host.hostnames),
+                    os=host.os,
+                    ports=[],
+                    host_scripts=[],
+                )
+                order.append(host.ip)
+            current = by_ip[host.ip]
+            if host.status == "up":
+                current.status = "up"
+            for name in host.hostnames:
+                if name not in current.hostnames:
+                    current.hostnames.append(name)
+            if len(host.os) > len(current.os):
+                current.os = host.os
+            port_index = {(p.protocol, p.number): p for p in current.ports}
+            for port in host.ports:
+                key = (port.protocol, port.number)
+                if key not in port_index:
+                    current.ports.append(port)
+                    port_index[key] = port
+                    continue
+                existing = port_index[key]
+                if port.state == "open":
+                    existing.state = "open"
+                if port.service and not existing.service:
+                    existing.service = port.service
+                if port.product:
+                    existing.product = port.product
+                if port.version:
+                    existing.version = port.version
+                if port.tunnel:
+                    existing.tunnel = port.tunnel
+                seen_ids = {s.id for s in existing.scripts}
+                for script in port.scripts:
+                    if script.id not in seen_ids:
+                        existing.scripts.append(script)
+                        seen_ids.add(script.id)
+            seen_host = {s.id for s in current.host_scripts}
+            for script in host.host_scripts:
+                if script.id not in seen_host:
+                    current.host_scripts.append(script)
+                    seen_host.add(script.id)
+    return [by_ip[ip] for ip in order]

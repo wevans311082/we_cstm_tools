@@ -138,3 +138,74 @@ tools:
       stealth: []
       standard: []
       loud: ["-v2c", "-c", "{community}", "{host}"]
+
+  - id: enum4linux-ng
+    binary: enum4linux-ng
+    install_hint: "sudo apt install enum4linux-ng"
+    min_intensity: standard
+    timeout_seconds: 240
+    output: services
+    match:
+      ports: [139, 445]
+      services: [microsoft-ds, netbios-ssn, smb]
+    argv:
+      stealth: []
+      standard: ["-A", "{host}"]
+      loud: ["-A", "{host}"]
+
+  - id: ldapsearch
+    binary: ldapsearch
+    install_hint: "sudo apt install ldap-utils"
+    min_intensity: standard
+    timeout_seconds: 60
+    output: info
+    match:
+      ports: [389, 636, 3268, 3269]
+      services: [ldap, ssl/ldap]
+    argv:
+      stealth: []
+      standard: ["-x", "-H", "ldap://{host}", "-s", "base", "namingContexts"]
+      loud: ["-x", "-H", "ldap://{host}", "-s", "base", "namingContexts"]
+
+  - id: testssl
+    binary: testssl.sh
+    install_hint: "sudo apt install testssl.sh"
+    min_intensity: loud
+    timeout_seconds: 300
+    output: info
+    match:
+      ports: [443, 8443, 636, 993, 995, 3389, 5986]
+      tunnel_ssl: true
+    argv:
+      stealth: []
+      standard: []
+      loud: ["--fast", "--color", "0", "{host}:{port}"]
+
+  - id: ike-scan
+    binary: ike-scan
+    install_hint: "sudo apt install ike-scan"
+    min_intensity: standard
+    timeout_seconds: 60
+    output: services
+    match:
+      ports: [500]
+      services: [isakmp]
+      protocols: [udp]
+    argv:
+      stealth: []
+      standard: ["{host}"]
+      loud: ["--aggressive", "{host}"]
+
+  - id: netexec-ms17
+    binary: netexec
+    install_hint: "pipx install netexec"
+    min_intensity: loud
+    timeout_seconds: 120
+    output: services
+    match:
+      ports: [445]
+      services: [microsoft-ds, smb]
+    argv:
+      stealth: []
+      standard: []
+      loud: ["smb", "{host}", "-M", "ms17-010"]

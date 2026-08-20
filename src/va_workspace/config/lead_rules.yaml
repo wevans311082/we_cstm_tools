@@ -1,0 +1,167 @@
+# Auto-leads from NSE output. Never become findings until the operator promotes them.
+rules:
+  - id: ftp-anon
+    script: ftp-anon
+    pattern: "(?i)anonymous"
+    title: "Anonymous FTP"
+    template: ftp-anon
+  - id: http-trace
+    script: http-trace
+    pattern: "(?i)TRACE"
+    title: "HTTP TRACE enabled"
+    template: http-trace
+  - id: http-methods
+    script: http-methods
+    pattern: "(?i)\\b(PUT|DELETE|CONNECT|TRACE)\\b"
+    title: "Dangerous HTTP methods"
+    template: http-methods
+  - id: http-security-headers
+    script: http-security-headers
+    pattern: "(?i)(missing|not present|strict-transport-security)"
+    title: "Missing HTTP security headers"
+    template: missing-hsts
+  - id: http-cookie-flags
+    script: http-cookie-flags
+    pattern: "(?i)(missing|httponly|secure)"
+    title: "Cookie security flags"
+    template: cookie-flags
+  - id: http-internal-ip
+    script: http-internal-ip-disclosure
+    pattern: "."
+    title: "Internal IP disclosed in HTTP"
+    template: internal-ip
+  - id: http-git
+    script: http-git
+    pattern: "(?i)git"
+    title: "Git metadata exposed"
+    template: git-exposed
+  - id: http-webdav
+    script: http-webdav-scan
+    pattern: "(?i)(webdav|enabled|PROPFIND)"
+    title: "WebDAV enabled"
+    template: webdav
+  - id: ssl-weak
+    script: ssl-enum-ciphers
+    pattern: "(?i)(SSLv2|SSLv3|TLSv1\\.0|TLSv1\\.0\\b|RC4|DES|3DES|NULL|EXPORT|broken|weak)"
+    title: "Weak TLS configuration"
+    template: weak-ciphers
+  - id: ssl-heartbleed
+    script: ssl-heartbleed
+    pattern: "(?i)VULNERABLE"
+    title: "Heartbleed (unverified)"
+    template: heartbleed
+  - id: ssl-poodle
+    script: ssl-poodle
+    pattern: "(?i)VULNERABLE"
+    title: "POODLE (unverified)"
+    template: tls10
+  - id: ssl-cert-intaddr
+    script: ssl-cert-intaddr
+    pattern: "."
+    title: "Internal names in certificate"
+    template: expired-cert
+  - id: smb-signing
+    script: smb-security-mode
+    pattern: "(?i)(disabled|not required|message signing enabled but not required)"
+    title: "SMB signing not required"
+    template: smb-signing
+  - id: smb2-signing
+    script: smb2-security-mode
+    pattern: "(?i)(disabled|not required|message signing enabled but not required)"
+    title: "SMBv2 signing not required"
+    template: smb-signing
+  - id: smbv1
+    script: smb-protocols
+    pattern: "(?i)(NT LM 0\\.12|SMBv1|dialect 2\\.0\\.2)"
+    title: "SMBv1 offered"
+    template: smbv1
+  - id: smb-shares
+    script: smb-enum-shares
+    pattern: "(?i)(Anonymous|Guest|access: READ)"
+    title: "Unauthenticated SMB shares"
+    template: smb-null
+  - id: ms17-010
+    script: smb-vuln-ms17-010
+    pattern: "(?i)VULNERABLE"
+    title: "MS17-010 EternalBlue (unverified)"
+    template: ms17-010
+  - id: smtp-relay
+    script: smtp-open-relay
+    pattern: "(?i)(open relay|Server is an open relay)"
+    title: "SMTP open relay"
+    template: smtp-relay
+  - id: dns-recursion
+    script: dns-recursion
+    pattern: "(?i)(Recursion appears to be enabled|available)"
+    title: "Open DNS resolver"
+    template: open-resolver
+  - id: dns-axfr
+    script: dns-zone-transfer
+    pattern: "(?i)(AXFR|records|SOA)"
+    title: "DNS zone transfer"
+    template: axfr
+  - id: ntp-monlist
+    script: ntp-monlist
+    pattern: "(?i)(ntp-monlist|received)"
+    title: "NTP monlist"
+    template: ntp-monlist
+  - id: nfs-exports
+    script: nfs-showmount
+    pattern: "."
+    title: "NFS exports"
+    template: nfs-export
+  - id: redis-unauth
+    script: redis-info
+    pattern: "."
+    title: "Redis unauthenticated"
+    template: redis-unauth
+  - id: mongo-unauth
+    script: mongodb-databases
+    pattern: "."
+    title: "MongoDB unauthenticated"
+    template: mongo-unauth
+  - id: mssql-blank
+    script: ms-sql-empty-password
+    pattern: "(?i)(empty|sa )"
+    title: "MSSQL blank sa password"
+    template: blank-sa
+  - id: mysql-blank
+    script: mysql-empty-password
+    pattern: "(?i)(empty|root)"
+    title: "MySQL empty password"
+    template: mysql-blank
+  - id: ipmi-cipher0
+    script: ipmi-cipher-zero
+    pattern: "(?i)VULNERABLE"
+    title: "IPMI cipher zero"
+    template: ipmi-cipher-zero
+  - id: rdp-ntlm
+    script: rdp-ntlm-info
+    pattern: "."
+    title: "RDP NTLM information disclosure"
+    template: rdp-exposed
+  - id: ssh-weak
+    script: ssh2-enum-algos
+    pattern: "(?i)(ssh-rsa|3des|arcfour|diffie-hellman-group1|hmac-md5)"
+    title: "Weak SSH algorithms"
+    template: ssh-weak
+  - id: snmp-users
+    script: snmp-win32-users
+    pattern: "."
+    title: "SNMP leaked Windows users"
+    template: snmp-public
+  - id: x11
+    script: x11-access
+    pattern: "(?i)(X server access is granted|allowed)"
+    title: "Open X11"
+    template: x11-open
+  - id: rsync
+    script: rsync-list-modules
+    pattern: "."
+    title: "Rsync modules listed"
+    template: rsync-open
+  - id: heartbleed-out
+    script: ssl-heartbleed
+    pattern: "(?i)VULNERABLE"
+    title: "Heartbleed"
+    template: heartbleed

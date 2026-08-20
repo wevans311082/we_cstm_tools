@@ -8,7 +8,15 @@ version: "{{ version }}"
 
 # Lead — {{ product }} {{ version }} on {{ host.ip }}
 
-**Unverified.** Do not copy this into the CHECK report. Promote with `va finding add` only after you have reproduced an issue.
+**Unverified.** Do not copy this into the CHECK report. Promote only after you have reproduced an issue.
+
+{% if template %}
+```text
+va finding add --template {{ template }} --hosts {{ host.ip }}{% if port and port != "-" %} --ports {{ port }}/{{ protocol }}{% endif %}
+```
+{% else %}
+Promote with `va finding add` after you have reproduced an issue.
+{% endif %}
 
 Service: `{{ service }}` on {{ port }}/{{ protocol }}
 

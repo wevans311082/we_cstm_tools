@@ -8,8 +8,8 @@ from pathlib import Path
 from va_workspace.config.load import load_tool_mappings
 from va_workspace.constants import NmapPhase
 from va_workspace.core.leads import write_leads
-from va_workspace.core.nmap_parser import parse_nmap_xml
-from va_workspace.core.nmap_runner import nmap_output_stem, run_nmap
+from va_workspace.core.nmap_parser import merge_hosts, parse_nmap_xml
+from va_workspace.core.nmap_runner import nmap_output_stem, run_nmap_pipeline
 from va_workspace.core.orchestrator import run_jobs
 from va_workspace.core.state import save_state
 from va_workspace.core.vault import write_host_notes, write_operator_docs, write_overview
@@ -18,19 +18,29 @@ from va_workspace.models import EngagementState
 from va_workspace.util import log
 
 
-def ingest_xml(state: EngagementState, xml_path: Path, *, copy_raw: bool = True) -> None:
-    xml_path = xml_path.expanduser().resolve()
+def ingest_xmls(
+    state: EngagementState, xml_paths: list[Path], *, copy_primary: bool = True
+) -> None:
+    existing = [path.expanduser().resolve() for path in xml_paths if path.is_file()]
+    if not existing:
+        raise FileNotFoundError("no nmap xml to ingest")
     dest_dir = state.path / "05-raw" / "nmap"
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / "scan.xml"
-    if copy_raw:
-        if xml_path.resolve() != dest.resolve():
-            shutil.copy2(xml_path, dest)
-        xml_path = dest
-    hosts = parse_nmap_xml(xml_path)
+    parsed = [parse_nmap_xml(path) for path in existing]
+    hosts = merge_hosts(*parsed) if len(parsed) > 1 else parsed[0]
+    if copy_primary:
+        dest = dest_dir / "scan.xml"
+        src = existing[0]
+        if src.resolve() != dest.resolve():
+            shutil.copy2(src, dest)
     state.hosts = hosts
     state.nmap.status = NmapPhase.COMPLETE
     state.nmap.output_stem = str(nmap_output_stem(state.path))
+    if state.nmap.tcp == "pending":
+        state.nmap.tcp = "complete"
+        state.nmap.scripts = "complete"
+        state.nmap.discovery = "skipped"
+        state.nmap.udp = "skipped"
     save_state(state)
     write_host_notes(state)
     write_overview(state)
@@ -39,7 +49,16 @@ def ingest_xml(state: EngagementState, xml_path: Path, *, copy_raw: bool = True)
     chart = write_service_chart(state)
     if chart:
         log.info(f"wrote {chart}")
+    from va_workspace.core.nse_leads import write_nse_leads
+
+    nse_leads = write_nse_leads(state)
+    if nse_leads:
+        log.info(f"wrote {nse_leads} NSE lead note(s)")
     log.success(f"ingested {len(hosts)} host(s) into {state.path}")
+
+
+def ingest_xml(state: EngagementState, xml_path: Path, *, copy_raw: bool = True) -> None:
+    ingest_xmls(state, [xml_path], copy_primary=copy_raw)
 
 
 def run_enum(state: EngagementState) -> None:
@@ -47,18 +66,36 @@ def run_enum(state: EngagementState) -> None:
     run_jobs(state, tools)
     leads = write_leads(state)
     if leads:
-        log.info(f"wrote {leads} searchsploit lead note(s)")
+        log.info(f"wrote {leads} lead note(s)")
     write_overview(state)
     write_operator_docs(state)
     save_state(state)
 
 
-def run_scan(state: EngagementState, extra_args: list[str], *, resume: bool) -> None:
+def run_scan(
+    state: EngagementState,
+    extra_args: list[str],
+    *,
+    resume: bool,
+    skip_host_discovery: bool = False,
+    enum: bool = True,
+) -> None:
     xml_path = Path(str(nmap_output_stem(state.path)) + ".xml")
     if resume and state.nmap.status == NmapPhase.COMPLETE and xml_path.is_file():
         log.info("resume: nmap already complete, re-parsing XML")
-        ingest_xml(state, xml_path, copy_raw=False)
+        extras = [
+            state.path / "05-raw" / "nmap" / name
+            for name in ("discovery.xml", "tcp.xml", "udp.xml", "scripts.xml", "scan.xml")
+        ]
+        present = [path for path in extras if path.is_file()]
+        ingest_xmls(state, present or [xml_path], copy_primary=False)
     else:
-        xml_path = run_nmap(state, extra_args)
-        ingest_xml(state, xml_path, copy_raw=False)
-    run_enum(state)
+        xmls = run_nmap_pipeline(
+            state,
+            extra_args,
+            resume=resume,
+            skip_host_discovery=skip_host_discovery or state.nmap.skip_host_discovery,
+        )
+        ingest_xmls(state, xmls, copy_primary=True)
+    if enum:
+        run_enum(state)

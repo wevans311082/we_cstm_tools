@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -13,13 +13,18 @@ from va_workspace.constants import FindingStatus, Intensity, JobStatus, Mode, Nm
 class NseScript:
     id: str
     output: str
+    data: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return {"id": self.id, "output": self.output, "data": dict(self.data)}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> NseScript:
-        return cls(id=str(data.get("id", "")), output=str(data.get("output", "")))
+        return cls(
+            id=str(data.get("id", "")),
+            output=str(data.get("output", "")),
+            data=dict(data.get("data") or {}),
+        )
 
 
 @dataclass
@@ -126,6 +131,21 @@ class Host:
     @property
     def slug(self) -> str:
         return self.ip.replace(":", "_")
+
+    @property
+    def role(self) -> str:
+        from va_workspace.core.roles import infer_role
+
+        return infer_role(self)
+
+    def all_scripts(self) -> list[tuple[Port | None, NseScript]]:
+        items: list[tuple[Port | None, NseScript]] = [
+            (None, script) for script in self.host_scripts
+        ]
+        for port in self.ports:
+            for script in port.scripts:
+                items.append((port, script))
+        return items
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -244,6 +264,11 @@ class Finding:
 @dataclass
 class NmapState:
     status: NmapPhase = NmapPhase.PENDING
+    discovery: str = "pending"
+    tcp: str = "pending"
+    udp: str = "pending"
+    scripts: str = "pending"
+    skip_host_discovery: bool = False
     output_stem: str = ""
     started: str = ""
     finished: str = ""
@@ -253,6 +278,11 @@ class NmapState:
     def to_dict(self) -> dict[str, Any]:
         return {
             "status": str(self.status),
+            "discovery": self.discovery,
+            "tcp": self.tcp,
+            "udp": self.udp,
+            "scripts": self.scripts,
+            "skip_host_discovery": self.skip_host_discovery,
             "output_stem": self.output_stem,
             "started": self.started,
             "finished": self.finished,
@@ -264,6 +294,11 @@ class NmapState:
     def from_dict(cls, data: dict[str, Any]) -> NmapState:
         return cls(
             status=NmapPhase(str(data.get("status", NmapPhase.PENDING))),
+            discovery=str(data.get("discovery", "pending")),
+            tcp=str(data.get("tcp", "pending")),
+            udp=str(data.get("udp", "pending")),
+            scripts=str(data.get("scripts", "pending")),
+            skip_host_discovery=bool(data.get("skip_host_discovery", False)),
             output_stem=str(data.get("output_stem", "")),
             started=str(data.get("started", "")),
             finished=str(data.get("finished", "")),

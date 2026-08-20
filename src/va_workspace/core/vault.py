@@ -39,6 +39,13 @@ def jinja_env() -> Environment:
         lstrip_blocks=True,
     )
     env.globals["managed"] = MANAGED_HEADER
+
+    def _clip(text: str, limit: int = 2000) -> str:
+        if len(text) <= limit:
+            return text
+        return text[:limit] + "\n… truncated; full NSE is in 05-raw/nmap"
+
+    env.filters["clip"] = _clip
     return env
 
 
@@ -125,6 +132,9 @@ def write_overview(state: EngagementState) -> None:
         render("overview.md.j2", **ctx),
         overwrite=True,
     )
+    from va_workspace.core.posture import write_posture_notes
+
+    write_posture_notes(state)
 
 
 def write_host_notes(state: EngagementState) -> None:

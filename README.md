@@ -39,7 +39,10 @@ cd ~/va-engagements/acme-YYYY-MM-DD
 va scan 10.10.0.0/24 --mode check --intensity stealth
 # VPN drop / laptop sleep
 va scan --resume
-va finding add --title "..." --cvss "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N" --hosts 10.10.0.5
+va finding add --template smb-signing --hosts 10.10.0.5
+va finding templates
+va note "Confirmed SMB signing off on DC01"
+va compare ../acme-2025-engagement
 va status
 ```
 
@@ -57,8 +60,10 @@ va ingest path/to/scan.xml --client acme --mode lab --out ./vault
 | `--intensity stealth\|standard\|loud` | Nmap shape, which YAML tools fire, concurrency. |
 | `--nmap-args "..."` | Escape hatch appended to the profiled Nmap command. Can disable safety; you own it. |
 | `--enum` on ingest | Also run secondary tools (Linux). |
+| `--pn` on scan | Skip host discovery (`-Pn`). |
+| `--template` on `finding add` | Fill CVSS, description, dual remediation from the library. |
 
-v1 is **unauthenticated only**. Findings are **operator-authored**. Searchsploit writes **leads**, not findings.
+Unauthenticated only. Findings are **operator-authored**. NSE and Searchsploit write **leads**. Nmap uses named script packs (stealth/standard/loud), not `--script vuln`.
 
 ## Develop (Windows)
 
