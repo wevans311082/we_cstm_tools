@@ -14,6 +14,15 @@ custom_stealth:
   - va-redirect-scope
   - va-interesting-host
   - va-http-default-page
+  - va-http-cors
+  - va-http-robots
+  - va-telnet-posture
+  - va-vnc-posture
+  - va-winrm-posture
+  - va-dns-recursion
+  - va-x11-open
+  - va-docker-api
+  - va-nbstat
 
 custom_standard:
   - va-ad-unauth
@@ -23,9 +32,30 @@ custom_standard:
   - va-git-exposed
   - va-mail-posture
   - va-db-unauth
+  - va-http-dav
+  - va-http-admin-paths
+  - va-http-vhosts
+  - va-tls-versions
+  - va-dns-axfr
+  - va-ntp-info
+  - va-rsync-modules
+  - va-mysql-empty
+  - va-mssql-ntlm
+  - va-mongodb-unauth
+  - va-sip-methods
+  - va-ajp-methods
+  - va-owa-paths
+  - va-mqtt-unauth
+  - va-cisco-smi
+  - va-tftp-files
 
 custom_loud:
   - va-git-exposed
+  - va-http-backup
+  - va-wordpress
+  - va-kubelet-anon
+  - va-jdwp-open
+  - va-ipmi-cipher0
 
 stealth:
   - banner

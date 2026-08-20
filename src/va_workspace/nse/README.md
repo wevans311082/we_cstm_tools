@@ -13,3 +13,5 @@ Nmap still executes them (they are Lua). We keep them here so CHECK ITHC checks 
 On Kali, `va nse list` and `va nse path` show what will run.
 
 Stock Nmap scripts remain available via `nse_packs.yaml` for standard/loud. Stealth prefers these custom scripts.
+
+`va` parses NSE XML tables (`script.data`) plus the text `output=` so lead rules match keys such as `cors: wildcard` and `unauth: yes`. Results are summarised in `01-overview/nse-results.md` and promoted from `04-leads/`.

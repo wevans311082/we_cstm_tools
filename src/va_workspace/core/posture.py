@@ -245,8 +245,41 @@ def write_posture_notes(state: EngagementState) -> None:
             "",
         ]
     )
+    nse_rows: list[list[str]] = []
+    for host in state.hosts:
+        for port, script in host.all_scripts():
+            if not str(script.id).startswith("va-"):
+                continue
+            loc = f"{port.number}/{port.protocol}" if port else "host"
+            snippet = (script.output or "").replace("\n", "; ")[:160]
+            nse_rows.append(
+                [
+                    f"[[02-hosts/{host.slug}/host|{host.ip}]]",
+                    loc,
+                    script.id,
+                    snippet.replace("|", "/"),
+                ]
+            )
+    nse_md = "\n".join(
+        [
+            MANAGED_HEADER,
+            "---",
+            f"tags: [nse, custom, {mode}]",
+            "---",
+            "",
+            "# Custom NSE results",
+            "",
+            "Output from `va-*.nse` Lua scripts. Promote via leads in `04-leads/`.",
+            "",
+            _md_table(["Host", "Port", "Script", "Summary"], nse_rows),
+            "",
+            "[[01-overview/attack-surface]] · [[04-leads]]",
+            "",
+        ]
+    )
     overview = state.path / "01-overview"
     _write(overview / "certs.md", cert_md, overwrite=True)
     _write(overview / "tls.md", tls_md, overwrite=True)
     _write(overview / "smb.md", smb_md, overwrite=True)
     _write(overview / "attack-surface.md", surface_md, overwrite=True)
+    _write(overview / "nse-results.md", nse_md, overwrite=True)

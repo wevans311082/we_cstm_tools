@@ -12,10 +12,10 @@ from va_workspace.config.nse import (
 from va_workspace.constants import Intensity, Mode
 from va_workspace.core.compare import compare_states
 from va_workspace.core.nmap_parser import merge_hosts, parse_nmap_xml
-from va_workspace.core.nse_leads import match_leads
+from va_workspace.core.nse_leads import flatten_script, match_leads
 from va_workspace.core.roles import infer_role
 from va_workspace.core.templates import get_template, load_finding_templates
-from va_workspace.models import EngagementState, Host, Port
+from va_workspace.models import EngagementState, Host, NseScript, Port
 
 
 def test_custom_lua_scripts_shipped() -> None:
@@ -25,7 +25,7 @@ def test_custom_lua_scripts_shipped() -> None:
     assert "va-http-posture.nse" in names
     assert "va-smb-posture.nse" in names
     assert "va-ssh-posture.nse" in names
-    assert len(files) >= 10
+    assert len(files) >= 40
     for path in files:
         text = path.read_text(encoding="utf-8")
         assert "categories" in text
@@ -36,8 +36,10 @@ def test_custom_pack_and_script_arg() -> None:
     stealth = custom_nse_names(Mode.CHECK, Intensity.STEALTH)
     standard = custom_nse_names(Mode.CHECK, Intensity.STANDARD)
     assert "va-http-posture" in stealth
+    assert "va-http-cors" in stealth
     assert "va-ad-unauth" not in stealth
     assert "va-ad-unauth" in standard
+    assert "va-http-backup" in custom_nse_names(Mode.LAB, Intensity.LOUD)
     arg = nse_script_arg(Mode.CHECK, Intensity.STEALTH)
     assert "va-http-posture.nse" in arg
     assert "ssl-cert" in arg
@@ -91,10 +93,28 @@ def test_merge_hosts() -> None:
     assert merged[0].ports[0].product == "nginx"
 
 
+def test_flatten_script_includes_table_keys() -> None:
+    script = NseScript(
+        id="va-http-cors",
+        output="",
+        data={"cors": "wildcard", "acao": "*"},
+    )
+    text = flatten_script(script)
+    assert "cors: wildcard" in text
+    host = Host(
+        ip="10.0.0.1",
+        ports=[Port(443, "tcp", "open", scripts=[script])],
+    )
+    titles = {hit["title"] for hit in match_leads(host)}
+    assert "Permissive CORS" in titles
+
+
 def test_templates_exist() -> None:
     templates = load_finding_templates()
     assert "smb-signing" in templates
     assert "heartbleed" in templates
+    assert "docker-api" in templates
+    assert "jdwp-open" in templates
     tmpl = get_template("ms17-010")
     assert tmpl.cvss.startswith("CVSS:3.1/")
 

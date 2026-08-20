@@ -75,6 +75,121 @@ rules:
     pattern: "(?i)default_page: yes"
     title: "Default HTTP page / management UI"
     template: missing-hsts
+  - id: va-cors
+    script: va-http-cors
+    pattern: "(?i)cors: (wildcard|reflects-origin)"
+    title: "Permissive CORS"
+    template: cors-wildcard
+  - id: va-robots
+    script: va-http-robots
+    pattern: "(?i)interesting: .+\\S"
+    title: "robots.txt interesting paths"
+    template: git-exposed
+  - id: va-dav
+    script: va-http-dav
+    pattern: "(?i)webdav: yes"
+    title: "WebDAV enabled"
+    template: webdav
+  - id: va-vhosts
+    script: va-http-vhosts
+    pattern: "(?i)vhosts: (?!none).+"
+    title: "Additional HTTP virtual hosts"
+    template: internal-ip
+  - id: va-admin
+    script: va-http-admin-paths
+    pattern: "(?i)admin_paths: yes"
+    title: "HTTP management path"
+    template: git-exposed
+  - id: va-backup
+    script: va-http-backup
+    pattern: "(?i)found: yes"
+    title: "Web backup/config file"
+    template: git-exposed
+  - id: va-winrm
+    script: va-winrm-posture
+    pattern: "(?i)exposed: yes"
+    title: "WinRM exposed"
+    template: winrm-exposed
+  - id: va-vnc
+    script: va-vnc-posture
+    pattern: "(?i)(vnc: yes|none_auth: yes)"
+    title: "VNC exposed"
+    template: vnc-exposed
+  - id: va-telnet
+    script: va-telnet-posture
+    pattern: "(?i)cleartext: yes"
+    title: "Telnet cleartext"
+    template: telnet-clear
+  - id: va-dns-rec
+    script: va-dns-recursion
+    pattern: "(?i)recursion: yes"
+    title: "Open DNS resolver"
+    template: open-resolver
+  - id: va-axfr
+    script: va-dns-axfr
+    pattern: "(?i)axfr: yes"
+    title: "DNS zone transfer"
+    template: axfr
+  - id: va-rsync
+    script: va-rsync-modules
+    pattern: "(?i)listed: yes"
+    title: "Rsync modules listed"
+    template: rsync-open
+  - id: va-x11
+    script: va-x11-open
+    pattern: "(?i)x11: open"
+    title: "X11 open"
+    template: x11-open
+  - id: va-docker
+    script: va-docker-api
+    pattern: "(?i)unauth: yes"
+    title: "Unauthenticated Docker API"
+    template: docker-api
+  - id: va-kube
+    script: va-kubelet-anon
+    pattern: "(?i)unauth: yes"
+    title: "Unauthenticated kubelet"
+    template: kubelet-anon
+  - id: va-mysql
+    script: va-mysql-empty
+    pattern: "(?i)empty_root: yes"
+    title: "MySQL empty root password"
+    template: mysql-blank
+  - id: va-mongo
+    script: va-mongodb-unauth
+    pattern: "(?i)unauth: yes"
+    title: "MongoDB unauthenticated"
+    template: mongo-unauth
+  - id: va-smi
+    script: va-cisco-smi
+    pattern: "(?i)smart_install: open"
+    title: "Cisco Smart Install"
+    template: cisco-smart-install
+  - id: va-mqtt
+    script: va-mqtt-unauth
+    pattern: "(?i)unauth: yes"
+    title: "MQTT unauthenticated"
+    template: mqtt-unauth
+  - id: va-jdwp
+    script: va-jdwp-open
+    pattern: "(?i)jdwp: yes"
+    title: "Java Debug Wire Protocol open"
+    template: jdwp-open
+  - id: va-owa
+    script: va-owa-paths
+    pattern: "(?i)exchange: yes"
+    title: "Exchange/OWA exposed"
+    template: owa-exposed
+  - id: va-wp
+    script: va-wordpress
+    pattern: "(?i)wordpress: yes"
+    title: "WordPress detected"
+    template: wordpress
+  - id: va-ipmi
+    script: va-ipmi-cipher0
+    pattern: "(?i)ipmi: open"
+    title: "IPMI exposed"
+    template: ipmi-cipher-zero
   - id: ftp-anon
     script: ftp-anon
     pattern: "(?i)anonymous"

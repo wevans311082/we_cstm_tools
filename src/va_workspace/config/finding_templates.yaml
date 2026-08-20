@@ -208,3 +208,57 @@ templates:
     description: HTTP headers or redirects exposed an RFC1918 address.
     short_term: Strip internal IPs from headers/errors on the reverse proxy.
     strategic: Standardised error pages; header allow-list.
+  cors-wildcard:
+    title: Permissive CORS policy
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N"
+    description: Access-Control-Allow-Origin is * or reflects an attacker Origin.
+    short_term: Restrict ACAO to known front-ends; never combine * with credentials.
+    strategic: CORS allow-list in the API gateway.
+  docker-api:
+    title: Unauthenticated Docker API
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"
+    description: Docker Engine API on 2375 answered /version without TLS auth.
+    short_term: Bind dockerd to localhost or a management net; require TLS client certs (2376).
+    strategic: No TCP Docker API on untrusted networks; use SSH or a socket proxy.
+  kubelet-anon:
+    title: Unauthenticated kubelet API
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"
+    description: Kubelet served /pods or similar without authentication.
+    short_term: Enable kubelet authentication/authorization; firewall 10250/10255.
+    strategic: CIS Kubernetes hardening; no anonymous kubelet.
+  jdwp-open:
+    title: Java Debug Wire Protocol exposed
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    description: JDWP handshake succeeded. This is remote code execution on the JVM.
+    short_term: Disable debug ports in production; bind to localhost.
+    strategic: Build pipeline that never ships JDWP on networked interfaces.
+  telnet-clear:
+    title: Telnet service in cleartext
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N"
+    description: Telnet answered with a login prompt. Credentials and session data are unencrypted.
+    short_term: Disable telnet; replace with SSH; isolate remaining appliances.
+    strategic: Inventory ICS/printers still using telnet and migrate.
+  vnc-exposed:
+    title: VNC service exposed
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N"
+    description: RFB/VNC is reachable. None-authentication is full desktop access.
+    short_term: Require VNC auth; tunnel over SSH/VPN; firewall 5900.
+    strategic: Enterprise remote-access instead of raw VNC.
+  mqtt-unauth:
+    title: MQTT broker without authentication
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:L"
+    description: MQTT CONNACK return code 0 with no credentials.
+    short_term: Enable MQTT auth and TLS; bind to a dedicated VLAN.
+    strategic: Authenticated IoT bus (certificates per device).
+  wordpress:
+    title: WordPress application detected
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: WordPress login or wp-content is present. Author enum may leak usernames.
+    short_term: Disable author enumerations; keep core/plugins patched; restrict wp-login.
+    strategic: WAF plus least-privilege admin; remove unused plugins.
+  owa-exposed:
+    title: Microsoft Exchange / OWA exposed
+    cvss: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+    description: OWA/EWS/Autodiscover paths answered. This is a high-value internet mail surface.
+    short_term: MFA; restrict legacy protocols; current CU/SU patching.
+    strategic: Exchange Online or hardened published access with WAF.

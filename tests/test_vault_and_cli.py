@@ -39,6 +39,7 @@ def test_ingest_and_finding(tmp_path: Path, nmap_xml: Path) -> None:
     assert (out / "01-overview" / "tls.md").is_file()
     assert (out / "01-overview" / "smb.md").is_file()
     assert (out / "01-overview" / "certs.md").is_file()
+    assert (out / "01-overview" / "nse-results.md").is_file()
     leads = list((out / "04-leads").glob("nse-*.md"))
     assert leads
     dashboard = (out / "01-overview" / "dashboard.md").read_text(encoding="utf-8")

@@ -9,7 +9,7 @@ from importlib.resources import files
 import yaml
 
 from va_workspace.core.vault import render
-from va_workspace.models import EngagementState, Host
+from va_workspace.models import EngagementState, Host, NseScript
 
 
 @dataclass(frozen=True)
@@ -38,15 +38,34 @@ def load_lead_rules() -> list[LeadRule]:
     return rules
 
 
+def flatten_script(script: NseScript) -> str:
+    """Searchable text: nmap output plus structured table keys."""
+    parts: list[str] = [script.output or ""]
+
+    def _walk(value: object, prefix: str) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                _walk(child, f"{prefix}{key}: ")
+        elif isinstance(value, list):
+            for child in value:
+                _walk(child, prefix)
+        elif value is not None and str(value) != "":
+            parts.append(f"{prefix}{value}")
+
+    _walk(script.data, "")
+    return "\n".join(parts)
+
+
 def match_leads(host: Host, rules: list[LeadRule] | None = None) -> list[dict[str, str]]:
     rules = rules if rules is not None else load_lead_rules()
     hits: list[dict[str, str]] = []
     seen: set[str] = set()
     for port, script in host.all_scripts():
+        haystack = flatten_script(script)
         for rule in rules:
             if script.id != rule.script:
                 continue
-            if not re.search(rule.pattern, script.output or "", re.IGNORECASE | re.DOTALL):
+            if not re.search(rule.pattern, haystack, re.IGNORECASE | re.DOTALL):
                 continue
             key = f"{rule.id}:{host.ip}:{port.number if port else 0}"
             if key in seen:
@@ -58,7 +77,7 @@ def match_leads(host: Host, rules: list[LeadRule] | None = None) -> list[dict[st
                     "title": rule.title,
                     "template": rule.template,
                     "script": script.id,
-                    "body": script.output[:8000],
+                    "body": haystack[:8000],
                     "host": host.ip,
                     "port": str(port.number) if port else "",
                     "protocol": port.protocol if port else "",
