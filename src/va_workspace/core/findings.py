@@ -92,7 +92,7 @@ def parse_finding_frontmatter(path: Path) -> dict[str, str]:
         return {}
     if not isinstance(parsed, dict):
         return {}
-    return {k: str(v) for k, v in parsed.items() if not isinstance(v, (dict, list))}
+    return {k: str(v) for k, v in parsed.items() if not isinstance(v, dict | list)}
 
 
 def load_finding(path: Path) -> Finding | None:
@@ -161,5 +161,9 @@ def edit_finding(
         updated.severity = severity_from_score(updated.cvss_score)
 
     path = write_finding_note(state, updated)
+    # If the title changed the slug, write_finding_note created a new file.
+    # Remove the old one to avoid stale duplicates.
+    if path.resolve() != matched.resolve() and matched.is_file():
+        matched.unlink()
     save_state(state)
     return updated, path

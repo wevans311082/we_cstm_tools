@@ -15,7 +15,7 @@ from va_workspace.config.nse import (
     list_custom_nse,
     packaged_nse_dir,
 )
-from va_workspace.config.profiles import intensity_or_default
+from va_workspace.config.profiles import intensity_or_default, is_privileged
 from va_workspace.constants import FindingStatus, Intensity, JobStatus, Mode
 from va_workspace.core.compare import write_compare
 from va_workspace.core.cvss import CvssError
@@ -26,7 +26,7 @@ from va_workspace.core.engagement import (
     maybe_warn_check_metadata,
     resolve_engagement_dir,
 )
-from va_workspace.core.findings import add_finding, parse_finding_frontmatter
+from va_workspace.core.findings import add_finding, edit_finding, parse_finding_frontmatter
 from va_workspace.core.nmap_runner import ScanPlatformError
 from va_workspace.core.pipeline import ingest_xml, run_enum, run_scan
 from va_workspace.core.state import save_state, try_load_state, utc_now
@@ -174,6 +174,62 @@ def _load_targets(target: str | None, extra: list[str]) -> list[str]:
     return values
 
 
+def _scan_dry_run(
+    targets: list[str],
+    excludes: list[str],
+    intensity: Intensity,
+    extra_args: list[str],
+    mode: Mode,
+    host_discovery: bool,
+) -> None:
+    """Print planned nmap command and secondary tool list without executing."""
+    from va_workspace.config.load import load_tool_mappings
+    from va_workspace.config.profiles import build_discovery_argv, build_tcp_argv
+    from va_workspace.core.plugins import intensity_rank
+
+    root = is_privileged()
+    disc_argv = build_discovery_argv(
+        nmap_path="nmap",
+        output_stem="/tmp/va-dry-run/discovery",
+        targets=targets,
+        excludes=excludes,
+        intensity=intensity,
+    )
+    tcp_argv, tcp_notes = build_tcp_argv(
+        nmap_path="nmap",
+        output_stem="/tmp/va-dry-run/tcp",
+        targets=targets,
+        excludes=excludes,
+        intensity=intensity,
+        extra_args=extra_args,
+        privileged=root,
+    )
+
+    out_console.print("[bold]Dry run — nothing will be executed[/bold]")
+    out_console.print(f"\n[cyan]Mode:[/cyan] {mode}  [cyan]Intensity:[/cyan] {intensity}")
+    if not host_discovery:
+        out_console.print("[yellow]Host discovery: skipped (--pn)[/yellow]")
+    else:
+        out_console.print(f"\n[cyan]Discovery argv:[/cyan]\n  {' '.join(disc_argv)}")
+    out_console.print(f"\n[cyan]TCP argv:[/cyan]\n  {' '.join(tcp_argv)}")
+    for note in tcp_notes:
+        out_console.print(f"  [yellow]note:[/yellow] {note}")
+
+    tools = load_tool_mappings()
+    active = [
+        t for t in tools
+        if intensity_rank(intensity) >= intensity_rank(t.min_intensity)
+        and t.argv.get(str(intensity))
+    ]
+    tool_table = Table(title=f"Secondary tools at intensity={intensity}")
+    tool_table.add_column("ID")
+    tool_table.add_column("Binary / module")
+    for t in active:
+        binary = t.python_module or t.binary
+        tool_table.add_row(t.id, binary)
+    out_console.print(tool_table)
+
+
 @app.command()
 def scan(
     target: str | None = typer.Argument(None, help="CIDR, IP, hostname, or targets file"),
@@ -190,6 +246,11 @@ def scan(
     client: str = typer.Option("", "--client"),
     no_enum: bool = typer.Option(False, "--no-enum", help="Skip secondary tools after Nmap"),
     pn: bool = typer.Option(False, "--pn", help="Skip host discovery (-Pn)"),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Print planned nmap command and secondary tools, then exit without running",
+    ),
 ) -> None:
     """Live Nmap (Linux) then vault + secondary enum. Resume-aware."""
     cwd = Path.cwd()
@@ -204,6 +265,10 @@ def scan(
     if not targets:
         log.error("provide TARGET or --resume from an engagement directory")
         raise typer.Exit(code=2)
+
+    if dry_run:
+        _scan_dry_run(targets, exclude, resolved_intensity, extra, mode, not pn)
+        return
 
     if engagement_dir is None:
         engagement_dir = default_out_dir(client or "scan")
@@ -323,6 +388,32 @@ def status(
     table.add_row("targets", ", ".join(state.targets) or "-")
     out_console.print(table)
 
+    # Severity distribution bar
+    files = list_finding_files(state)
+    if files:
+        counts: dict[str, int] = {}
+        for f in files:
+            meta = parse_finding_frontmatter(f)
+            sev = meta.get("severity", "unknown")
+            counts[sev] = counts.get(sev, 0) + 1
+        order = ["critical", "high", "medium", "low", "none", "unknown"]
+        colours = {
+            "critical": "red",
+            "high": "orange1",
+            "medium": "yellow",
+            "low": "green",
+            "none": "dim",
+            "unknown": "dim",
+        }
+        bar_parts: list[str] = []
+        for sev in order:
+            n = counts.get(sev, 0)
+            if n:
+                colour = colours.get(sev, "white")
+                bar_parts.append(f"[{colour}]{'■' * n} {sev}:{n}[/{colour}]")
+        if bar_parts:
+            out_console.print("  " + "  ".join(bar_parts))
+
 
 @finding_app.command("templates")
 def finding_templates() -> None:
@@ -348,6 +439,14 @@ def finding_add(
     strategic: str = typer.Option("", "--strategic"),
     evidence: list[str] = typer.Option([], "--evidence"),
     status: FindingStatus = typer.Option(FindingStatus.DRAFT, "--status"),
+    from_lead: Path | None = typer.Option(
+        None,
+        "--from-lead",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        help="Pre-populate from a lead note's YAML frontmatter (still requires --cvss)",
+    ),
     out: Path | None = typer.Option(None, "--out"),
 ) -> None:
     """Author a finding with CVSS 3.1. Tools never do this for you."""
@@ -359,17 +458,43 @@ def finding_add(
     if state is None:
         log.error("no state.json")
         raise typer.Exit(code=1)
-    if not template and (not title or not cvss):
-        log.error("provide --template or both --title and --cvss")
+
+    # --from-lead: pre-populate fields from the lead's YAML frontmatter.
+    # Operator must still supply --cvss; other flags override the lead values.
+    lead_hosts: list[str] = []
+    lead_description = ""
+    lead_title = ""
+    if from_lead is not None:
+        lead_meta = parse_finding_frontmatter(from_lead)
+        lead_host = lead_meta.get("host", "")
+        if lead_host:
+            lead_hosts = [lead_host]
+        product = lead_meta.get("product", "")
+        version = lead_meta.get("version", "")
+        if product:
+            lead_title = product + (f" {version}" if version else "") + " — unverified lead"
+            lead_description = (
+                f"Lead from `{from_lead.name}`. "
+                f"Product: {product}"
+                + (f" {version}" if version else "")
+                + ". Verify before promoting to a confirmed finding."
+            )
+
+    effective_title = title or lead_title
+    effective_hosts = list(hosts) or lead_hosts
+    effective_description = description or lead_description
+
+    if not template and (not effective_title or not cvss):
+        log.error("provide --template or both --title and --cvss (--from-lead pre-populates title)")
         raise typer.Exit(code=2)
     try:
         finding, dest = add_finding(
             state,
-            title=title or "",
+            title=effective_title or "",
             cvss_vector=cvss or "",
-            hosts=list(hosts),
+            hosts=effective_hosts,
             ports=list(ports),
-            description=description,
+            description=effective_description,
             short_term_fix=short_term,
             strategic_fix=strategic,
             evidence=list(evidence),
@@ -418,6 +543,47 @@ def finding_list(
             meta.get("title", ""),
         )
     out_console.print(table)
+
+
+@finding_app.command("edit")
+def finding_edit_cmd(
+    finding_id: str = typer.Argument(..., help="Finding ID, e.g. F-001"),
+    title: str | None = typer.Option(None, "--title", help="New title"),
+    cvss: str | None = typer.Option(None, "--cvss", help="New CVSS 3.1 vector"),
+    hosts: list[str] = typer.Option([], "--hosts", help="Replace host list"),
+    ports: list[str] = typer.Option([], "--ports", help="Replace port list"),
+    status: FindingStatus | None = typer.Option(None, "--status"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Update title, CVSS, hosts, ports, or status on an existing finding note."""
+    path = resolve_engagement_dir(out, Path.cwd())
+    if path is None:
+        log.error("not an engagement directory")
+        raise typer.Exit(code=2)
+    state = try_load_state(path)
+    if state is None:
+        log.error("no state.json")
+        raise typer.Exit(code=1)
+    try:
+        finding, dest = edit_finding(
+            state,
+            finding_id,
+            title=title,
+            cvss_vector=cvss,
+            hosts=list(hosts) if hosts else None,
+            ports=list(ports) if ports else None,
+            status=status,
+        )
+    except FileNotFoundError as exc:
+        log.error(str(exc))
+        raise typer.Exit(code=2) from exc
+    except (ValueError, CvssError) as exc:
+        log.error(str(exc))
+        raise typer.Exit(code=2) from exc
+    from va_workspace.core.vault import write_operator_docs
+
+    write_operator_docs(state)
+    log.success(f"{finding.id} updated → {dest}")
 
 
 @app.command()

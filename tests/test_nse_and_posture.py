@@ -137,3 +137,62 @@ def test_compare_states(tmp_path: Path) -> None:
     text = compare_states(cur, prev)
     assert "10.0.0.2" in text
     assert "80/tcp" in text
+
+
+def test_compare_port_closed(tmp_path: Path) -> None:
+    """A port that was open in the previous engagement but is now closed appears in the diff."""
+    prev = EngagementState(
+        path=tmp_path / "old",
+        client="acme",
+        hosts=[Host(ip="10.0.0.1", ports=[Port(22, "tcp", "open"), Port(8080, "tcp", "open")])],
+    )
+    cur = EngagementState(
+        path=tmp_path / "new",
+        client="acme",
+        hosts=[Host(ip="10.0.0.1", ports=[Port(22, "tcp", "open"), Port(8080, "tcp", "closed")])],
+    )
+    text = compare_states(cur, prev)
+    # 8080 changed state — should appear in "ports no longer seen" (open→closed)
+    assert "8080" in text
+
+
+def test_compare_new_and_gone_host(tmp_path: Path) -> None:
+    prev = EngagementState(
+        path=tmp_path / "old",
+        client="acme",
+        hosts=[Host(ip="10.0.0.1"), Host(ip="10.0.0.3")],
+    )
+    cur = EngagementState(
+        path=tmp_path / "new",
+        client="acme",
+        hosts=[Host(ip="10.0.0.1"), Host(ip="10.0.0.2")],
+    )
+    text = compare_states(cur, prev)
+    assert "10.0.0.2" in text  # new host
+    assert "10.0.0.3" in text  # gone host
+
+
+def test_compare_no_change(tmp_path: Path) -> None:
+    state = EngagementState(
+        path=tmp_path / "vault",
+        client="acme",
+        hosts=[Host(ip="10.0.0.1", ports=[Port(22, "tcp", "open")])],
+    )
+    text = compare_states(state, state)
+    assert "_none_" in text  # no new/closed ports
+
+
+def test_compare_finding_diff(tmp_path: Path) -> None:
+    prev = EngagementState(
+        path=tmp_path / "old",
+        client="acme",
+        findings=["F-001", "F-002"],
+    )
+    cur = EngagementState(
+        path=tmp_path / "new",
+        client="acme",
+        findings=["F-001", "F-003"],
+    )
+    text = compare_states(cur, prev)
+    assert "F-003" in text  # added
+    assert "F-002" in text  # removed
