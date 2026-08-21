@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 from va_workspace.constants import FindingStatus
 from va_workspace.core.cvss import base_score, severity_from_score
@@ -74,17 +77,89 @@ def add_finding(
 
 
 def parse_finding_frontmatter(path: Path) -> dict[str, str]:
+    """Extract YAML frontmatter from a finding note as a flat string dict."""
     text = path.read_text(encoding="utf-8")
-    marker = text.find("---")
-    if marker == -1:
+    # Skip the leading managed-header comment if present
+    start = text.find("---")
+    if start == -1:
         return {}
-    rest = text[marker + 3 :]
+    rest = text[start + 3 :]
     end = rest.find("\n---")
     block = rest[:end] if end != -1 else rest
-    data: dict[str, str] = {}
-    for line in block.splitlines():
-        if ":" not in line:
-            continue
-        key, value = line.split(":", 1)
-        data[key.strip()] = value.strip().strip('"')
-    return data
+    try:
+        parsed: Any = yaml.safe_load(block)
+    except yaml.YAMLError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {k: str(v) for k, v in parsed.items() if not isinstance(v, (dict, list))}
+
+
+def load_finding(path: Path) -> Finding | None:
+    """Reconstruct a Finding dataclass from a note's YAML frontmatter."""
+    meta = parse_finding_frontmatter(path)
+    fid = meta.get("id", "")
+    if not fid:
+        return None
+    try:
+        status = FindingStatus(meta.get("status", FindingStatus.DRAFT))
+    except ValueError:
+        status = FindingStatus.DRAFT
+    return Finding(
+        id=fid,
+        title=meta.get("title", ""),
+        cvss_vector=meta.get("cvss_vector", ""),
+        cvss_score=float(meta.get("cvss_score", 0.0)),
+        severity=meta.get("severity", "none"),
+        status=status,
+        hosts=[],
+        ports=[],
+        evidence=[],
+        short_term_fix="",
+        strategic_fix="",
+        description="",
+        created=meta.get("created", ""),
+    )
+
+
+def edit_finding(
+    state: EngagementState,
+    finding_id: str,
+    *,
+    title: str | None = None,
+    cvss_vector: str | None = None,
+    hosts: list[str] | None = None,
+    ports: list[str] | None = None,
+    status: FindingStatus | None = None,
+) -> tuple[Finding, Path]:
+    """Update fields on an existing finding note and save state."""
+    files = list_finding_files(state)
+    matched = next((p for p in files if p.name.startswith(finding_id + "-")), None)
+    if matched is None:
+        raise FileNotFoundError(f"finding {finding_id} not found in vault")
+    existing = load_finding(matched)
+    if existing is None:
+        raise ValueError(f"could not parse frontmatter from {matched}")
+
+    updated = Finding(
+        id=existing.id,
+        title=title if title is not None else existing.title,
+        cvss_vector=(cvss_vector.strip() if cvss_vector is not None else existing.cvss_vector),
+        cvss_score=existing.cvss_score,
+        severity=existing.severity,
+        status=status if status is not None else existing.status,
+        hosts=hosts if hosts is not None else existing.hosts,
+        ports=ports if ports is not None else existing.ports,
+        evidence=existing.evidence,
+        short_term_fix=existing.short_term_fix,
+        strategic_fix=existing.strategic_fix,
+        description=existing.description,
+        created=existing.created,
+    )
+    if cvss_vector is not None:
+        updated.cvss_score = base_score(updated.cvss_vector)
+        updated.severity = severity_from_score(updated.cvss_score)
+
+    path = write_finding_note(state, updated)
+    save_state(state)
+    return updated, path

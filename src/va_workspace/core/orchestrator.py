@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -103,7 +104,6 @@ def _run_one(
         job.status = JobStatus.SKIPPED
         job.skip_reason = "port no longer matches"
         return job
-    import sys
 
     if tool.python_module:
         binary_path = sys.executable
@@ -234,6 +234,11 @@ def run_jobs(state: EngagementState, tools: list[ToolMapping]) -> None:
         job.status = JobStatus.RUNNING
         return _run_one(state, job, tools, intensity)
 
+    # Thread-safety contract:
+    # - Workers (_wrapped/_run_one) only READ state.hosts, state.targets, and state.excludes.
+    # - Workers WRITE only their own Job object (returned as `finished`).
+    # - The main thread owns state.jobs and calls save_state under `lock`.
+    # Do not add writes to state.hosts inside workers without extending the lock scope.
     lock = threading.Lock()
     with ThreadPoolExecutor(max_workers=profile.workers) as pool:
         futures = {pool.submit(_wrapped, job): job for job in pending}

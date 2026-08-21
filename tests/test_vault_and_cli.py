@@ -105,6 +105,7 @@ def test_init(tmp_path: Path) -> None:
 
 def test_scan_refuses_non_linux(tmp_path: Path) -> None:
     result = runner.invoke(app, ["scan", "10.0.0.1", "--out", str(tmp_path / "scan-out")])
-    combined = result.stdout + result.stderr
+    # CliRunner mixes stderr into output by default; use .output (not .stderr)
+    combined = result.output
     assert result.exit_code != 0
     assert "Linux" in combined or "nmap" in combined.lower() or "TARGET" in combined

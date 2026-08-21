@@ -65,7 +65,7 @@ def render(name: str, **context: Any) -> str:
     return jinja_env().get_template(name).render(**context)
 
 
-def _write(path: Path, content: str, *, overwrite: bool) -> None:
+def write_file(path: Path, content: str, *, overwrite: bool) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_file() and not overwrite:
         return
@@ -105,14 +105,14 @@ def ensure_tree(state: EngagementState) -> None:
 
 def write_operator_docs(state: EngagementState, *, force: bool = False) -> None:
     ctx = _ctx(state)
-    _write(state.path / "engagement.md", render("engagement.md.j2", **ctx), overwrite=force)
-    _write(state.path / "scope.md", render("scope.md.j2", **ctx), overwrite=force)
-    _write(
+    write_file(state.path / "engagement.md", render("engagement.md.j2", **ctx), overwrite=force)
+    write_file(state.path / "scope.md", render("scope.md.j2", **ctx), overwrite=force)
+    write_file(
         state.path / "rules-of-engagement.md",
         render("roe.md.j2", **ctx),
         overwrite=force,
     )
-    _write(
+    write_file(
         state.path / "08-pre-engagement" / "checklist.md",
         render("pre_engagement.md.j2", **ctx),
         overwrite=force,
@@ -124,17 +124,17 @@ def write_operator_docs(state: EngagementState, *, force: bool = False) -> None:
             continue
         if name == "05-findings-index.md" or name == "07-appendix-tooling.md":
             overwrite = True
-        _write(dest, render(f"report/{name}.j2", **ctx), overwrite=overwrite or force)
+        write_file(dest, render(f"report/{name}.j2", **ctx), overwrite=overwrite or force)
 
 
 def write_overview(state: EngagementState) -> None:
     ctx = _ctx(state)
-    _write(
+    write_file(
         state.path / "01-overview" / "dashboard.md",
         render("dashboard.md.j2", **ctx),
         overwrite=True,
     )
-    _write(
+    write_file(
         state.path / "01-overview" / "network-overview.md",
         render("overview.md.j2", **ctx),
         overwrite=True,
@@ -150,14 +150,14 @@ def write_host_notes(state: EngagementState) -> None:
         for sub in ("services", "info", "loot", "evidence"):
             (directory / sub).mkdir(parents=True, exist_ok=True)
         ctx = _ctx(state) | {"host": host}
-        _write(directory / "host.md", render("host.md.j2", **ctx), overwrite=True)
+        write_file(directory / "host.md", render("host.md.j2", **ctx), overwrite=True)
 
 
 def write_finding_note(state: EngagementState, finding: Finding) -> Path:
     slug = _slug(finding.title)
     dest = state.path / "03-findings" / f"{finding.id}-{slug}.md"
     ctx = _ctx(state) | {"finding": finding}
-    _write(dest, render("finding.md.j2", **ctx), overwrite=True)
+    write_file(dest, render("finding.md.j2", **ctx), overwrite=True)
     return dest
 
 

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from va_workspace.constants import INTERESTING_PORTS, MANAGED_HEADER
 from va_workspace.core.roles import infer_role
-from va_workspace.core.vault import _write
+from va_workspace.core.vault import write_file
 from va_workspace.models import EngagementState, Host, Port
 
 _WEAK_TLS = re.compile(
@@ -278,8 +278,8 @@ def write_posture_notes(state: EngagementState) -> None:
         ]
     )
     overview = state.path / "01-overview"
-    _write(overview / "certs.md", cert_md, overwrite=True)
-    _write(overview / "tls.md", tls_md, overwrite=True)
-    _write(overview / "smb.md", smb_md, overwrite=True)
-    _write(overview / "attack-surface.md", surface_md, overwrite=True)
-    _write(overview / "nse-results.md", nse_md, overwrite=True)
+    write_file(overview / "certs.md", cert_md, overwrite=True)
+    write_file(overview / "tls.md", tls_md, overwrite=True)
+    write_file(overview / "smb.md", smb_md, overwrite=True)
+    write_file(overview / "attack-surface.md", surface_md, overwrite=True)
+    write_file(overview / "nse-results.md", nse_md, overwrite=True)

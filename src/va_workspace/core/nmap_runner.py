@@ -231,7 +231,8 @@ def run_nmap(state: EngagementState, extra_args: list[str]) -> Path:
     scan = _xml(nmap_output_stem(state.path))
     if scan.is_file():
         return scan
+    # Skip discovery.xml — it only contains host-up/down info, not open ports.
     for path in xmls:
-        if path.name.endswith(".xml"):
+        if path.name.endswith(".xml") and path.name != "discovery.xml":
             return path
     raise RuntimeError("nmap produced no XML")

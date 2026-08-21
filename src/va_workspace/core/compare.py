@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from va_workspace.constants import MANAGED_HEADER
-from va_workspace.core.vault import _write
+from va_workspace.core.vault import write_file
 from va_workspace.models import EngagementState, Host
 
 
 def _port_set(host: Host) -> set[tuple[str, int, str]]:
-    return {(p.protocol, p.number, p.state) for p in host.open_ports}
+    # Include all ports (not just open) so ports that close between engagements are diffed.
+    return {(p.protocol, p.number, p.state) for p in host.ports}
 
 
 def compare_states(current: EngagementState, previous: EngagementState) -> str:
@@ -26,6 +27,12 @@ def compare_states(current: EngagementState, previous: EngagementState) -> str:
             new_ports.append(f"{ip} {num}/{proto} ({state})")
         for proto, num, state in sorted(b - a):
             closed_ports.append(f"{ip} {num}/{proto} ({state})")
+
+    cur_ids = set(current.findings)
+    prev_ids = set(previous.findings)
+    added_findings = sorted(cur_ids - prev_ids)
+    removed_findings = sorted(prev_ids - cur_ids)
+
     lines = [
         MANAGED_HEADER,
         "---",
@@ -51,13 +58,19 @@ def compare_states(current: EngagementState, previous: EngagementState) -> str:
             "",
             f"Findings now: {len(current.findings)}; then: {len(previous.findings)}",
             "",
+            "## Findings added",
+            "",
         ]
     )
+    lines.extend([f"- `{fid}`" for fid in added_findings] or ["- _none_"])
+    lines.extend(["", "## Findings removed", ""])
+    lines.extend([f"- `{fid}`" for fid in removed_findings] or ["- _none_"])
+    lines.append("")
     return "\n".join(lines) + "\n"
 
 
 def write_compare(current: EngagementState, previous: EngagementState) -> None:
-    _write(
+    write_file(
         current.path / "01-overview" / "retest-diff.md",
         compare_states(current, previous),
         overwrite=True,

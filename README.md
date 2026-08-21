@@ -12,6 +12,12 @@ Full product spec: [`SPEC.md`](SPEC.md).
 
 ## Install (Kali)
 
+**Required:** `nmap` — `va scan` will not start without it.
+
+**Optional** (graceful degradation when absent — `va doctor` shows hints):
+`whatweb`, `sslscan`, `feroxbuster`, `gowitness`, `netexec`, `onesixtyone`, `snmpwalk`,
+`searchsploit` (exploitdb), `enum4linux-ng`, `ldapsearch`, `testssl.sh`, `ike-scan`.
+
 ```bash
 sudo apt update
 sudo apt install -y nmap whatweb sslscan feroxbuster gowitness onesixtyone snmp \

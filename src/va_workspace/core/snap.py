@@ -34,7 +34,9 @@ class CaptureResult:
 
 
 def detect_capture_backend() -> str | None:
-    wayland = bool(os.environ.get("WAYLAND_DISPLAY"))
+    wayland = bool(os.environ.get("WAYLAND_DISPLAY")) or (
+        os.environ.get("XDG_SESSION_TYPE") == "wayland"
+    )
     if wayland and which("grim") and which("slurp"):
         return "grim"
     if which("maim"):
@@ -47,7 +49,10 @@ def detect_capture_backend() -> str | None:
 
 
 def detect_clipboard_backend() -> str | None:
-    if os.environ.get("WAYLAND_DISPLAY") and which("wl-copy"):
+    wayland = bool(os.environ.get("WAYLAND_DISPLAY")) or (
+        os.environ.get("XDG_SESSION_TYPE") == "wayland"
+    )
+    if wayland and which("wl-copy"):
         return "wl-copy"
     if which("xclip"):
         return "xclip"
@@ -214,7 +219,7 @@ def resolve_vault(out: Path | None) -> Path | None:
 
 def listen_hotkey(engagement: Path, hotkey: str) -> None:
     try:
-        from pynput import keyboard
+        from pynput import keyboard  # type: ignore[import-untyped]
     except ImportError as exc:
         raise RuntimeError(
             "hotkey listener needs pynput: pipx inject va-workspace pynput"

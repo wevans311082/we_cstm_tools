@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from va_workspace.config.load import ToolMapping
-from va_workspace.constants import Intensity
+from va_workspace.constants import FORBIDDEN_ARGV_PLACEHOLDERS, Intensity
 from va_workspace.models import Host, Job, Port
 from va_workspace.util.scope import is_in_scope, url_in_scope
 
@@ -74,7 +74,8 @@ def interpolate_argv(
         value = item
         for token, replacement in mapping.items():
             value = value.replace(token, replacement)
-        if "{user}" in value.lower() or "{password}" in value.lower():
+        lower = value.lower()
+        if any(ph in lower for ph in FORBIDDEN_ARGV_PLACEHOLDERS):
             raise PluginError("refusing to interpolate credential placeholders")
         rendered.append(value)
     if any(part == "" for part in rendered):
