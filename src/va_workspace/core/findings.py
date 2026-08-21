@@ -95,6 +95,14 @@ def parse_finding_frontmatter(path: Path) -> dict[str, str]:
     return {k: str(v) for k, v in parsed.items() if not isinstance(v, dict | list)}
 
 
+def _safe_float(value: str) -> float:
+    """Convert a string to float, returning 0.0 on invalid/corrupted values."""
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def load_finding(path: Path) -> Finding | None:
     """Reconstruct a Finding dataclass from a note's YAML frontmatter."""
     meta = parse_finding_frontmatter(path)
@@ -109,7 +117,7 @@ def load_finding(path: Path) -> Finding | None:
         id=fid,
         title=meta.get("title", ""),
         cvss_vector=meta.get("cvss_vector", ""),
-        cvss_score=float(meta.get("cvss_score", 0.0)),
+        cvss_score=_safe_float(meta.get("cvss_score", "0.0")),
         severity=meta.get("severity", "none"),
         status=status,
         hosts=[],

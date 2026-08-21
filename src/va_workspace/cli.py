@@ -187,17 +187,19 @@ def _scan_dry_run(
     from va_workspace.config.profiles import build_discovery_argv, build_tcp_argv
     from va_workspace.core.plugins import intensity_rank
 
+    # Use a descriptive placeholder path so the operator sees where output would land.
+    out_stem = "<engagement>/05-raw/nmap"
     root = is_privileged()
     disc_argv = build_discovery_argv(
         nmap_path="nmap",
-        output_stem="/tmp/va-dry-run/discovery",
+        output_stem=f"{out_stem}/discovery",
         targets=targets,
         excludes=excludes,
         intensity=intensity,
     )
     tcp_argv, tcp_notes = build_tcp_argv(
         nmap_path="nmap",
-        output_stem="/tmp/va-dry-run/tcp",
+        output_stem=f"{out_stem}/tcp",
         targets=targets,
         excludes=excludes,
         intensity=intensity,

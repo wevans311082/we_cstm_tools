@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from va_workspace.constants import JobStatus
 from va_workspace.core.orchestrator import merge_jobs
 from va_workspace.models import EngagementState, Job
@@ -11,12 +13,8 @@ def _job(job_id: str, status: JobStatus = JobStatus.PENDING) -> Job:
     return j
 
 
-def test_merge_jobs_appends_new(tmp_path: object) -> None:
-    state = EngagementState(path=object.__new__(type(tmp_path)))  # type: ignore[arg-type]
-    import tempfile
-    from pathlib import Path
-
-    state = EngagementState(path=Path(tempfile.mkdtemp()))
+def test_merge_jobs_appends_new(tmp_path: Path) -> None:
+    state = EngagementState(path=tmp_path)
     state.jobs = [_job("a"), _job("b")]
     new_jobs = [_job("b"), _job("c")]
     merge_jobs(state, new_jobs)
@@ -25,22 +23,16 @@ def test_merge_jobs_appends_new(tmp_path: object) -> None:
     assert "c" in ids  # new job appended
 
 
-def test_merge_jobs_interrupted_becomes_failed(tmp_path: object) -> None:
-    import tempfile
-    from pathlib import Path
-
-    state = EngagementState(path=Path(tempfile.mkdtemp()))
+def test_merge_jobs_interrupted_becomes_failed(tmp_path: Path) -> None:
+    state = EngagementState(path=tmp_path)
     state.jobs = [_job("x", JobStatus.RUNNING)]
     merge_jobs(state, [_job("x")])
     job = next(j for j in state.jobs if j.id == "x")
     assert job.status == JobStatus.FAILED
 
 
-def test_merge_jobs_complete_job_unchanged(tmp_path: object) -> None:
-    import tempfile
-    from pathlib import Path
-
-    state = EngagementState(path=Path(tempfile.mkdtemp()))
+def test_merge_jobs_complete_job_unchanged(tmp_path: Path) -> None:
+    state = EngagementState(path=tmp_path)
     state.jobs = [_job("done", JobStatus.COMPLETE)]
     merge_jobs(state, [_job("done")])
     job = next(j for j in state.jobs if j.id == "done")
