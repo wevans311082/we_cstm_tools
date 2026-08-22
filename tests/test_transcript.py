@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
+from va_workspace.cli import app
 from va_workspace.core.transcript import (
     TRANSCRIPT_DIR,
     build_argv,
@@ -15,6 +17,40 @@ from va_workspace.core.transcript import (
     write_command_log,
     write_rcfile,
 )
+
+runner = CliRunner()
+
+
+def test_transcript_without_out_resolves_its_options(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: the no-subcommand path used to pass OptionInfo defaults through as values."""
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["--no-snap-check", "transcript"])
+
+    assert not isinstance(result.exception, TypeError)
+    assert "unsupported operand" not in result.output
+    # tmp_path is not an engagement directory, so this is the expected rejection.
+    assert result.exit_code == 2
+
+
+def test_transcript_start_matches_the_bare_invocation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    bare = runner.invoke(app, ["--no-snap-check", "transcript"])
+    explicit = runner.invoke(app, ["--no-snap-check", "transcript", "start"])
+
+    assert bare.exit_code == explicit.exit_code == 2
+    assert not isinstance(bare.exception, TypeError)
+    assert not isinstance(explicit.exception, TypeError)
+
+
+def test_transcript_list_reports_empty_vault(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["--no-snap-check", "transcript", "list", "--out", str(tmp_path)])
+
+    assert not isinstance(result.exception, TypeError)
+    assert result.exit_code == 1
 
 
 def _session(tmp_path: Path, name: str = "demo"):

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from va_workspace.config.nse import nse_script_arg
+from va_workspace.config.nse import nse_script_arg, nse_selection
 from va_workspace.constants import (
     DEFAULT_INTENSITY,
     PROFILE_DELAY_SECONDS,
@@ -399,10 +399,12 @@ def build_scripts_argv(
     privileged: bool | None = None,
 ) -> tuple[list[str], list[str]]:
     profile = nmap_profile(intensity)
-    script_arg = nse_script_arg(mode, intensity)
+    selection = nse_selection(mode, intensity)
+    script_arg = selection.arg
+    notes: list[str] = selection.notes()
     if not script_arg or not ports:
-        return [], ["no NSE scripts or no open ports"]
-    notes: list[str] = []
+        notes.append("no NSE scripts or no open ports")
+        return [], notes
     root = is_privileged() if privileged is None else privileged
     scan, scan_notes = _scan_type(root)
     notes.extend(scan_notes)

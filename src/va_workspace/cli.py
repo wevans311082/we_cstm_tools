@@ -137,6 +137,48 @@ def nse_list(
     out_console.print(f"path: {packaged_nse_dir()}")
 
 
+@nse_app.command("verify")
+def nse_verify(
+    mode: Mode = ModeOpt,
+    intensity: Intensity | None = IntensityOpt,
+) -> None:
+    """Check every script name against this machine's nmap. One bad name aborts a scan."""
+    from va_workspace.config.nse import (
+        installed_stock_scripts,
+        nse_selection,
+        script_db_path,
+        unknown_stock_scripts,
+    )
+
+    db = script_db_path()
+    if db is None:
+        log.warn("nmap script.db not found — script names cannot be verified on this host")
+        log.info("install nmap, or set NMAPDIR to its data directory")
+        raise typer.Exit(code=1)
+    log.info(f"script.db: {db} ({len(installed_stock_scripts())} scripts)")
+
+    resolved = intensity_or_default(mode, intensity)
+    selection = nse_selection(mode, resolved)
+    out_console.print(
+        f"selected for mode={mode} intensity={resolved}: "
+        f"{len(selection.custom)} custom + {len(selection.stock)} stock"
+    )
+    unknown = unknown_stock_scripts()
+    if not unknown and not selection.missing_custom:
+        log.success("all script names resolve against this nmap")
+        return
+    table = Table(title="Unresolvable scripts")
+    table.add_column("Script")
+    table.add_column("Kind")
+    for name in unknown:
+        table.add_row(name, "stock (not in script.db)")
+    for name in selection.missing_custom:
+        table.add_row(name, "custom Lua missing")
+    out_console.print(table)
+    log.warn("these are dropped automatically at scan time, but fix nse_packs.yaml")
+    raise typer.Exit(code=1)
+
+
 @app.command()
 def version() -> None:
     """Print package version."""
@@ -169,6 +211,19 @@ def doctor() -> None:
     nse_files = list_custom_nse()
     log.info(f"loaded {report.mapping_count} tool mapping(s)")
     log.info(f"custom NSE Lua: {len(nse_files)} script(s) in {packaged_nse_dir()}")
+    from va_workspace.config.nse import script_db_path, unknown_stock_scripts
+
+    if script_db_path() is None:
+        log.warn("nmap script.db not found — stock script names cannot be verified")
+    else:
+        unknown = unknown_stock_scripts()
+        if unknown:
+            log.warn(
+                f"{len(unknown)} stock NSE name(s) missing from this nmap "
+                f"(dropped at scan time): {', '.join(unknown)}"
+            )
+        else:
+            log.info("stock NSE names: all resolve against this nmap")
     from va_workspace.core.snap import detect_capture_backend, detect_clipboard_backend
 
     snap_b = detect_capture_backend() or "missing (apt install maim  or grim+slurp)"
@@ -761,23 +816,14 @@ transcript_app = typer.Typer(
 )
 app.add_typer(transcript_app, name="transcript")
 
+NameOpt = typer.Option(None, "--name", help="Label for this session")
+TranscriptOutOpt = typer.Option(None, "--out")
+CommandOpt = typer.Option(
+    None, "--command", "-c", help="Record a single command instead of an interactive shell"
+)
 
-@transcript_app.callback()
-def transcript_root(ctx: typer.Context) -> None:
-    """Start recording when no subcommand is given."""
-    if ctx.invoked_subcommand is None:
-        transcript_start()
 
-
-@transcript_app.command("start")
-def transcript_start(
-    name: str | None = typer.Option(None, "--name", help="Label for this session"),
-    out: Path | None = typer.Option(None, "--out"),
-    command: str | None = typer.Option(
-        None, "--command", "-c", help="Record a single command instead of an interactive shell"
-    ),
-) -> None:
-    """Open a recorded bash. Everything from here on lands in the vault; `exit` stops it."""
+def _record_transcript(name: str | None, out: Path | None, command: str | None) -> None:
     from va_workspace.core.transcript import TranscriptError, record
 
     path = resolve_engagement_dir(out, Path.cwd())
@@ -791,6 +837,28 @@ def transcript_start(
         raise typer.Exit(code=2) from exc
     log.success(f"raw log:     {session.raw}")
     log.success(f"command log: {session.commands}")
+
+
+@transcript_app.callback()
+def transcript_root(
+    ctx: typer.Context,
+    name: str | None = NameOpt,
+    out: Path | None = TranscriptOutOpt,
+    command: str | None = CommandOpt,
+) -> None:
+    """Record a shell session; starts recording when no subcommand is given."""
+    if ctx.invoked_subcommand is None:
+        _record_transcript(name, out, command)
+
+
+@transcript_app.command("start")
+def transcript_start(
+    name: str | None = NameOpt,
+    out: Path | None = TranscriptOutOpt,
+    command: str | None = CommandOpt,
+) -> None:
+    """Open a recorded bash. Everything from here on lands in the vault; `exit` stops it."""
+    _record_transcript(name, out, command)
 
 
 @transcript_app.command("list")

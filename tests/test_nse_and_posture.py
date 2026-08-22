@@ -2,12 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from va_workspace.config import nse as nse_mod
 from va_workspace.config.nse import (
     custom_nse_names,
+    installed_stock_scripts,
     list_custom_nse,
     nse_script_arg,
     nse_scripts,
+    nse_selection,
     packaged_nse_dir,
+    unknown_stock_scripts,
 )
 from va_workspace.constants import Intensity, Mode
 from va_workspace.core.compare import compare_states
@@ -16,6 +22,82 @@ from va_workspace.core.nse_leads import flatten_script, match_leads
 from va_workspace.core.roles import infer_role
 from va_workspace.core.templates import get_template, load_finding_templates
 from va_workspace.models import EngagementState, Host, NseScript, Port
+
+
+@pytest.fixture
+def fake_script_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Pretend nmap ships a small script.db so name validation has something to check."""
+
+    def _install(names: list[str]) -> Path:
+        db = tmp_path / "script.db"
+        db.write_text(
+            "\n".join(
+                f'Entry {{ filename = "{name}.nse", categories = {{ "safe", }} }}'
+                for name in names
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(nse_mod, "script_db_path", lambda: db)
+        installed_stock_scripts.cache_clear()
+        return db
+
+    yield _install
+    installed_stock_scripts.cache_clear()
+
+
+def test_unknown_stock_names_are_dropped_not_fatal(fake_script_db) -> None:
+    """Regression: one bad name made nmap abort the whole script engine."""
+    fake_script_db(["ssl-cert", "http-title"])
+
+    selection = nse_selection(Mode.CHECK, Intensity.STEALTH)
+    assert "ssl-cert" in selection.stock
+    assert selection.dropped, "names absent from script.db must be dropped"
+    assert all(name not in selection.arg.split(",") for name in selection.dropped)
+    assert any("skipped" in note for note in selection.notes())
+
+
+def test_all_names_pass_when_script_db_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(nse_mod, "script_db_path", lambda: None)
+    installed_stock_scripts.cache_clear()
+    try:
+        selection = nse_selection(Mode.CHECK, Intensity.STEALTH)
+        assert not selection.dropped
+        assert "ssl-cert" in selection.stock
+    finally:
+        installed_stock_scripts.cache_clear()
+
+
+def test_categories_and_wildcards_are_never_dropped(fake_script_db) -> None:
+    fake_script_db(["ssl-cert"])
+    assert unknown_stock_scripts()  # the packs reference far more than one script
+    assert nse_mod._is_known("default")
+    assert nse_mod._is_known("http-*")
+
+
+def test_afp_script_name_matches_nmap(fake_script_db) -> None:
+    """afp-server-info is not a real nmap script; the name is afp-serverinfo."""
+    names = nse_scripts(Mode.LAB, Intensity.STANDARD)
+    assert "afp-serverinfo" in names
+    assert "afp-server-info" not in names
+
+
+def test_every_custom_pack_name_has_shipped_lua() -> None:
+    """A custom name with no matching .nse would silently vanish from every scan."""
+    shipped = {path.stem for path in list_custom_nse()}
+    referenced: set[str] = set()
+    for mode in Mode:
+        for intensity in Intensity:
+            referenced.update(custom_nse_names(mode, intensity))
+    assert referenced
+    assert not (referenced - shipped), f"packs reference missing Lua: {referenced - shipped}"
+
+
+def test_selection_reports_missing_custom_lua(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(nse_mod, "packaged_nse_dir", lambda: Path("/nonexistent"))
+    selection = nse_selection(Mode.CHECK, Intensity.STEALTH)
+    assert selection.missing_custom
+    assert not selection.custom
+    assert any("missing packaged Lua" in note for note in selection.notes())
 
 
 def test_custom_lua_scripts_shipped() -> None:

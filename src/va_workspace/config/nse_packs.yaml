@@ -161,7 +161,7 @@ standard:
   - memcached-info
   - cups-info
   - rsync-list-modules
-  - afp-server-info
+  - afp-serverinfo
   - afp-ls
   - iscsi-info
   - vmware-version

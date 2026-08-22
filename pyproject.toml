@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "va-workspace"
-version = "0.6.0"
+dynamic = ["version"]
 description = "Kali operator toolkit that turns Nmap reconnaissance into a CHECK-shaped Obsidian vault."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -47,6 +47,10 @@ Homepage = "https://github.com/wevans311082/we_cstm_tools"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Single source of truth: bump __version__ in src/va_workspace/__init__.py only.
+[tool.setuptools.dynamic]
+version = { attr = "va_workspace.__version__" }
 
 [tool.setuptools.package-data]
 va_workspace = [
