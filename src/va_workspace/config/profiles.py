@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from va_workspace.config.nse import nse_script_arg
 from va_workspace.constants import (
     DEFAULT_INTENSITY,
     PROFILE_DELAY_SECONDS,
+    PROFILE_HOST_TIMEOUT,
     PROFILE_MAX_RATE,
     PROFILE_MAX_RETRIES,
+    PROFILE_MIN_RATE,
     PROFILE_WORKERS,
     SCRIPT_TIMEOUT,
     Intensity,
@@ -31,6 +34,8 @@ class NmapProfile:
     max_rate: int
     max_retries: int
     script_timeout: str
+    min_rate: int | None = None
+    host_timeout: str | None = None
 
 
 def intensity_or_default(mode: Mode, intensity: Intensity | None) -> Intensity:
@@ -41,6 +46,7 @@ def intensity_or_default(mode: Mode, intensity: Intensity | None) -> Intensity:
 
 def nmap_profile(intensity: Intensity) -> NmapProfile:
     if intensity is Intensity.STEALTH:
+        # Slow and quiet: opt in with --intensity stealth for fragile or monitored networks.
         return NmapProfile(
             intensity=intensity,
             tcp_ports=["--top-ports", "1000"],
@@ -54,28 +60,33 @@ def nmap_profile(intensity: Intensity) -> NmapProfile:
             max_rate=PROFILE_MAX_RATE[intensity],
             max_retries=PROFILE_MAX_RETRIES[intensity],
             script_timeout=SCRIPT_TIMEOUT,
+            min_rate=PROFILE_MIN_RATE[intensity],
+            host_timeout=PROFILE_HOST_TIMEOUT[intensity],
         )
     if intensity is Intensity.STANDARD:
+        # Default: fast. Top 3000 TCP ports covers real services without paying for -p-.
         return NmapProfile(
             intensity=intensity,
-            tcp_ports=["-p-"],
+            tcp_ports=["--top-ports", "3000"],
             udp_top_ports=20,
-            timing="-T3",
-            version_intensity=7,
+            timing="-T4",
+            version_intensity=5,
             os_detect=True,
             workers=PROFILE_WORKERS[intensity],
             delay_seconds=PROFILE_DELAY_SECONDS[intensity],
-            nmap_timeout=12 * 60 * 60,
+            nmap_timeout=6 * 60 * 60,
             max_rate=PROFILE_MAX_RATE[intensity],
             max_retries=PROFILE_MAX_RETRIES[intensity],
             script_timeout=SCRIPT_TIMEOUT,
+            min_rate=PROFILE_MIN_RATE[intensity],
+            host_timeout=PROFILE_HOST_TIMEOUT[intensity],
         )
     return NmapProfile(
         intensity=intensity,
         tcp_ports=["-p-"],
         udp_top_ports=100,
         timing="-T4",
-        version_intensity=9,
+        version_intensity=7,
         os_detect=True,
         workers=PROFILE_WORKERS[intensity],
         delay_seconds=PROFILE_DELAY_SECONDS[intensity],
@@ -83,7 +94,106 @@ def nmap_profile(intensity: Intensity) -> NmapProfile:
         max_rate=PROFILE_MAX_RATE[intensity],
         max_retries=PROFILE_MAX_RETRIES[intensity],
         script_timeout=SCRIPT_TIMEOUT,
+        min_rate=PROFILE_MIN_RATE[intensity],
+        host_timeout=PROFILE_HOST_TIMEOUT[intensity],
     )
+
+
+# Operator nmap switches replace the profile's equivalents rather than stacking with them.
+_EXACT_GROUPS: dict[str, frozenset[str]] = {
+    "-F": frozenset({"ports"}),
+    "--top-ports": frozenset({"ports"}),
+    "--exclude-ports": frozenset({"ports"}),
+    "--max-rate": frozenset({"rate"}),
+    "--min-rate": frozenset({"rate"}),
+    "--max-retries": frozenset({"retries"}),
+    "-sV": frozenset({"version"}),
+    "--version-intensity": frozenset({"version"}),
+    "--version-all": frozenset({"version"}),
+    "--version-light": frozenset({"version"}),
+    "-O": frozenset({"os"}),
+    "--osscan-guess": frozenset({"os"}),
+    "--osscan-limit": frozenset({"os"}),
+    "-sC": frozenset({"scripts"}),
+    "--script": frozenset({"scripts"}),
+    "--script-args": frozenset({"scripts"}),
+    "--script-args-file": frozenset({"scripts"}),
+    "--script-timeout": frozenset({"scripts"}),
+    "--host-timeout": frozenset({"hosttimeout"}),
+    "--scan-delay": frozenset({"delay"}),
+    "--max-scan-delay": frozenset({"delay"}),
+    "-A": frozenset({"version", "os", "scripts"}),
+}
+_SCAN_TYPES = frozenset({"-sS", "-sT", "-sA", "-sW", "-sM", "-sN", "-sF", "-sX", "-sY", "-sZ"})
+_VALUE_FLAGS = frozenset(
+    {
+        "-p",
+        "--top-ports",
+        "--exclude-ports",
+        "--max-rate",
+        "--min-rate",
+        "--max-retries",
+        "--version-intensity",
+        "--script",
+        "--script-args",
+        "--script-args-file",
+        "--script-timeout",
+        "--host-timeout",
+        "--scan-delay",
+        "--max-scan-delay",
+    }
+)
+# We own the output files; the pipeline cannot parse results without them.
+_PROTECTED_OUTPUT = frozenset({"-oA", "-oX", "-oN", "-oG", "-oS", "--resume", "--stylesheet"})
+_TIMING = re.compile(r"^-T[0-5]$")
+
+
+def _groups_for(token: str) -> frozenset[str]:
+    if token in _EXACT_GROUPS:
+        return _EXACT_GROUPS[token]
+    if token in _SCAN_TYPES:
+        return frozenset({"scantype"})
+    if _TIMING.match(token):
+        return frozenset({"timing"})
+    if token.startswith("-P"):
+        return frozenset({"discovery"})
+    if token.startswith("-p"):
+        return frozenset({"ports"})
+    return frozenset()
+
+
+def apply_overrides(base: list[str], extra: list[str]) -> tuple[list[str], list[str]]:
+    """Merge operator nmap args into a profile argv, dropping the flags they replace."""
+    notes: list[str] = []
+    cleaned: list[str] = []
+    skip_value = False
+    for token in extra:
+        if skip_value:
+            skip_value = False
+            continue
+        if token in _PROTECTED_OUTPUT:
+            notes.append(f"ignored {token}: va manages nmap output files")
+            skip_value = token != "--resume"
+            continue
+        cleaned.append(token)
+
+    touched: set[str] = set()
+    for token in cleaned:
+        touched |= _groups_for(token)
+    if not touched:
+        return [*base, *cleaned], notes
+
+    merged: list[str] = []
+    index = 0
+    while index < len(base):
+        token = base[index]
+        if _groups_for(token) & touched:
+            notes.append(f"override: profile {token} replaced by --nmap-args")
+            index += 2 if token in _VALUE_FLAGS and index + 1 < len(base) else 1
+            continue
+        merged.append(token)
+        index += 1
+    return [*merged, *cleaned], notes
 
 
 def is_privileged() -> bool:
@@ -140,6 +250,10 @@ def build_nmap_argv(
         "--max-rate",
         str(profile.max_rate),
     ]
+    if profile.min_rate:
+        argv.extend(["--min-rate", str(profile.min_rate)])
+    if profile.host_timeout:
+        argv.extend(["--host-timeout", profile.host_timeout])
     argv.extend(profile.tcp_ports)
 
     if profile.os_detect and not skip_os_detect:
@@ -170,7 +284,8 @@ def build_nmap_argv(
         argv.extend(["--exclude", ",".join(excludes)])
 
     argv.extend(["-oA", output_stem])
-    argv.extend(extra_args)
+    argv, override_notes = apply_overrides(argv, extra_args)
+    notes.extend(override_notes)
     argv.extend(targets)
     return argv, notes
 
@@ -191,9 +306,12 @@ def build_discovery_argv(
         "--reason",
         "--max-rate",
         str(profile.max_rate),
-        "-oA",
-        output_stem,
     ]
+    if profile.min_rate:
+        argv.extend(["--min-rate", str(profile.min_rate)])
+    if profile.host_timeout:
+        argv.extend(["--host-timeout", profile.host_timeout])
+    argv.extend(["-oA", output_stem])
     if excludes:
         argv.extend(["--exclude", ",".join(excludes)])
     argv.extend(targets)
@@ -230,6 +348,7 @@ def build_udp_argv(
     targets: list[str],
     excludes: list[str],
     intensity: Intensity,
+    extra_args: list[str] | None = None,
     privileged: bool | None = None,
 ) -> tuple[list[str], list[str]]:
     profile = nmap_profile(intensity)
@@ -243,6 +362,8 @@ def build_udp_argv(
         nmap_path,
         "-sU",
         "-sV",
+        "--version-intensity",
+        str(profile.version_intensity),
         profile.timing,
         "--top-ports",
         str(profile.udp_top_ports),
@@ -251,11 +372,16 @@ def build_udp_argv(
         str(profile.max_rate),
         "--max-retries",
         str(profile.max_retries),
-        "-oA",
-        output_stem,
     ]
+    if profile.min_rate:
+        argv.extend(["--min-rate", str(profile.min_rate)])
+    if profile.host_timeout:
+        argv.extend(["--host-timeout", profile.host_timeout])
+    argv.extend(["-oA", output_stem])
     if excludes:
         argv.extend(["--exclude", ",".join(excludes)])
+    argv, override_notes = apply_overrides(argv, extra_args or [])
+    notes.extend(override_notes)
     argv.extend(targets)
     return argv, notes
 
@@ -295,11 +421,13 @@ def build_scripts_argv(
         "--reason",
         "--max-rate",
         str(profile.max_rate),
-        "-oA",
-        output_stem,
     ]
+    if profile.host_timeout:
+        argv.extend(["--host-timeout", profile.host_timeout])
+    argv.extend(["-oA", output_stem])
     if excludes:
         argv.extend(["--exclude", ",".join(excludes)])
-    argv.extend(extra_args)
+    argv, override_notes = apply_overrides(argv, extra_args)
+    notes.extend(override_notes)
     argv.extend(targets)
     return argv, notes

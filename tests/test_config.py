@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from va_workspace.config.load import load_tool_mappings
-from va_workspace.config.profiles import build_nmap_argv, intensity_or_default
+from va_workspace.config.profiles import build_nmap_argv, intensity_or_default, nmap_profile
 from va_workspace.constants import Intensity, Mode
 
 
@@ -86,6 +86,72 @@ def test_nmap_fallback_unprivileged() -> None:
 
 
 def test_default_intensity() -> None:
-    assert intensity_or_default(Mode.CHECK, None) is Intensity.STEALTH
+    assert intensity_or_default(Mode.CHECK, None) is Intensity.STANDARD
     assert intensity_or_default(Mode.LAB, None) is Intensity.STANDARD
     assert intensity_or_default(Mode.CHECK, Intensity.LOUD) is Intensity.LOUD
+    assert intensity_or_default(Mode.CHECK, Intensity.STEALTH) is Intensity.STEALTH
+
+
+def test_default_profile_is_fast() -> None:
+    fast = nmap_profile(Intensity.STANDARD)
+    slow = nmap_profile(Intensity.STEALTH)
+    assert fast.timing == "-T4"
+    assert fast.tcp_ports == ["--top-ports", "3000"]
+    assert fast.min_rate and fast.min_rate > 0
+    assert fast.host_timeout
+    assert fast.max_retries < slow.max_retries
+    assert fast.max_rate > slow.max_rate
+    assert slow.min_rate is None
+    assert slow.timing == "-T2"
+
+
+def test_overrides_replace_profile_flags() -> None:
+    argv, notes = build_nmap_argv(
+        nmap_path="nmap",
+        output_stem="/tmp/scan",
+        targets=["10.0.0.0/24"],
+        excludes=[],
+        intensity=Intensity.STANDARD,
+        extra_args=["-T5", "-p-", "--min-rate", "10000"],
+        privileged=True,
+    )
+    assert "-T4" not in argv
+    assert "-T5" in argv
+    assert "--top-ports" not in argv
+    assert "-p-" in argv
+    assert argv.count("--min-rate") == 1
+    assert argv[argv.index("--min-rate") + 1] == "10000"
+    assert argv[-1] == "10.0.0.0/24"
+    assert any("replaced" in note for note in notes)
+
+
+def test_overrides_leave_untouched_flags_alone() -> None:
+    argv, _ = build_nmap_argv(
+        nmap_path="nmap",
+        output_stem="/tmp/scan",
+        targets=["10.0.0.1"],
+        excludes=[],
+        intensity=Intensity.STANDARD,
+        extra_args=["--open"],
+        privileged=True,
+    )
+    assert "--open" in argv
+    assert "-T4" in argv
+    assert "--top-ports" in argv
+
+
+def test_overrides_cannot_hijack_output_files() -> None:
+    argv, notes = build_nmap_argv(
+        nmap_path="nmap",
+        output_stem="/tmp/scan",
+        targets=["10.0.0.1"],
+        excludes=[],
+        intensity=Intensity.STANDARD,
+        extra_args=["-oA", "/tmp/evil", "--open"],
+        privileged=True,
+    )
+    assert argv.count("-oA") == 1
+    assert "/tmp/evil" not in argv
+    assert argv[argv.index("-oA") + 1] == "/tmp/scan"
+    assert "--open" in argv
+    assert any("va manages nmap output" in note for note in notes)

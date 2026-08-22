@@ -90,6 +90,7 @@ def ensure_tree(state: EngagementState) -> None:
         "05-raw/nmap",
         "05-raw/tools",
         "06-logs/screenshots",
+        "06-logs/transcripts",
         "08-pre-engagement",
         "09-attachments/screenshots",
         ".obsidian",

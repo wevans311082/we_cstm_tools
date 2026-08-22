@@ -189,6 +189,26 @@ def run_command_streamed(
     )
 
 
+def run_interactive(
+    argv: list[str],
+    *,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+) -> int:
+    """Run a binary attached to the operator's terminal. Output is not captured."""
+    bad = _argv_error(argv)
+    if bad is not None:
+        raise ValueError(bad.error)
+    completed = subprocess.run(  # noqa: S603 - argv list, shell=False
+        argv,
+        cwd=cwd,
+        env=env,
+        check=False,
+        shell=False,
+    )
+    return int(completed.returncode)
+
+
 def binary_version(binary: str, timeout: int = 15) -> str:
     """Best-effort version string for the tooling appendix."""
     path = which(binary)

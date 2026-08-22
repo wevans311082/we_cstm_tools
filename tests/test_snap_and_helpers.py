@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 from va_workspace.core.portsplit import parse_ports_expr, ports_to_expr, split_ports
@@ -36,6 +38,52 @@ def test_live_feed_records_hosts_and_ports(tmp_path: Path) -> None:
     assert "10.0.0.5" in body
     assert "**443/tcp** open" in body
     assert "**80/tcp** open http" in body
+
+
+def test_snap_daemon_reports_idle_and_clears_stale_pid(tmp_path: Path) -> None:
+    from va_workspace.core import snap_daemon
+
+    assert snap_daemon.status(tmp_path) is None
+    assert not snap_daemon.was_started(tmp_path)
+
+    snap_daemon._write(  # noqa: SLF001
+        tmp_path, snap_daemon.DaemonInfo(pid=999999, hotkey="<ctrl>+<alt>+s", started="now")
+    )
+    assert snap_daemon.was_started(tmp_path)
+    assert snap_daemon.status(tmp_path) is None
+    assert not snap_daemon.pid_file(tmp_path).is_file()
+
+
+def test_snap_daemon_ensure_stays_idle_without_pidfile(tmp_path: Path) -> None:
+    from va_workspace.core import snap_daemon
+
+    info, action = snap_daemon.ensure(tmp_path, "<ctrl>+<alt>+s", autostart=False)
+    assert info is None
+    assert action == "idle"
+
+
+def test_snap_daemon_lifecycle(tmp_path: Path) -> None:
+    """Spawn a real detached child, verify liveness tracking, then stop it."""
+    from va_workspace.core import snap_daemon
+
+    script = "import time\nwhile True: time.sleep(1)\n"
+    argv = [sys.executable, "-c", script]
+    proc = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        snap_daemon._write(  # noqa: SLF001
+            tmp_path,
+            snap_daemon.DaemonInfo(pid=proc.pid, hotkey="<ctrl>+<alt>+s", started="now"),
+        )
+        info = snap_daemon.status(tmp_path)
+        assert info is not None
+        assert info.pid == proc.pid
+
+        assert snap_daemon.stop(tmp_path)
+        assert snap_daemon.status(tmp_path) is None
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait(timeout=10)
 
 
 def test_smb_unauth_probe_handles_refused() -> None:

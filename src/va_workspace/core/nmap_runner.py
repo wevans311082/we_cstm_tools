@@ -221,6 +221,7 @@ def run_nmap_pipeline(
         targets=targets,
         excludes=state.excludes,
         intensity=intensity,
+        extra_args=extra_args,
     )
     if not udp_argv:
         for note in udp_notes:
@@ -262,7 +263,7 @@ def run_nmap_pipeline(
             intensity=intensity,
             mode=mode,
             ports=open_ports,
-            extra_args=[],
+            extra_args=extra_args,
             privileged=is_privileged(),
         )
         if not argv:

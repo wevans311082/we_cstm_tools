@@ -74,33 +74,39 @@ def _root(
     _snap_opts.update({"check": not no_snap_check, "listen": snap_listen, "hotkey": snap_hotkey})
 
 
-def snap_preflight(engagement: Path | None, *, allow_listener: bool = False) -> None:
-    """Report screenshot/listener readiness, and start the listener if asked for.
+def snap_preflight(engagement: Path | None) -> None:
+    """Report screenshot readiness and keep the detached hotkey listener alive.
 
-    The listener is a daemon thread, so it only outlives commands that keep running
-    (scan/enum); short commands just report readiness.
+    Once a listener has been started for a vault its PID file persists, so any later
+    va command notices a dead daemon and reloads it.
     """
     if not _snap_opts["check"]:
         return
-    from va_workspace.core.snap import snap_status, start_background_listener
+    from va_workspace.core.snap import ensure_listener, snap_status
 
-    want_listener = bool(_snap_opts["listen"]) and allow_listener and engagement is not None
-    if want_listener:
-        assert engagement is not None
-        status = start_background_listener(engagement, str(_snap_opts["hotkey"]))
+    hotkey = str(_snap_opts["hotkey"])
+    if engagement is None:
+        status, action = snap_status(), "idle"
     else:
-        status = snap_status()
+        status, action = ensure_listener(
+            engagement, hotkey, autostart=bool(_snap_opts["listen"])
+        )
     if status.ready:
         log.info(f"[dim]snap ready — {status.summary()}[/dim]")
     else:
         log.warn(f"snap not ready — {status.summary()}")
     for hint in status.hints():
         log.warn(f"  {hint}")
-    if want_listener and not status.listening:
-        log.warn("screenshot hotkey listener did not start")
-    elif status.listening:
-        log.success(f"screenshot hotkey listener active ({_snap_opts['hotkey']})")
-    elif status.ready and status.hotkey_available and not allow_listener:
+
+    if action == "reloaded":
+        log.warn(f"snap listener had died — reloaded (pid {status.pid}, {hotkey})")
+    elif action == "rebound":
+        log.info(f"snap listener restarted on {hotkey} (pid {status.pid})")
+    elif action == "started":
+        log.success(f"snap listener started (pid {status.pid}, {hotkey})")
+    elif action == "failed":
+        log.warn("snap listener failed to start — see 06-logs/snap-listener.log")
+    elif action == "idle" and status.ready and status.hotkey_available:
         log.info(f"[dim]hotkey capture: run `va snap --listen` (default {_SNAP_HOTKEY})[/dim]")
 
 
@@ -216,27 +222,72 @@ def _load_targets(target: str | None, extra: list[str]) -> list[str]:
     return values
 
 
-@app.command()
+def _nmap_overrides(
+    *,
+    nmap_args: list[str],
+    passthrough: list[str],
+    ports: str | None,
+    all_ports: bool,
+    top_ports: int | None,
+) -> list[str]:
+    """Collect operator nmap switches from --nmap-args, bare passthrough, and shortcuts."""
+    import shlex
+
+    extra: list[str] = []
+    for chunk in nmap_args:
+        extra.extend(shlex.split(chunk))
+    extra.extend(passthrough)
+    if all_ports:
+        extra.append("-p-")
+    elif ports:
+        extra.extend(["-p", ports])
+    elif top_ports:
+        extra.extend(["--top-ports", str(top_ports)])
+    if extra:
+        log.warn("nmap override: " + " ".join(extra) + "  (you own the consequences)")
+    return extra
+
+
+@app.command(
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
 def scan(
+    ctx: typer.Context,
     target: str | None = typer.Argument(None, help="CIDR, IP, hostname, or targets file"),
     mode: Mode = ModeOpt,
     intensity: Intensity | None = IntensityOpt,
     out: Path | None = typer.Option(None, "--out"),
     resume: bool = typer.Option(False, "--resume"),
     exclude: list[str] = typer.Option([], "--exclude"),
-    nmap_args: str | None = typer.Option(
-        None,
+    nmap_args: list[str] = typer.Option(
+        [],
         "--nmap-args",
-        help="Extra nmap arguments (appended; can disable safety — you own this)",
+        help="Nmap switches that override the profile, e.g. --nmap-args '-T5 -p- --min-rate 10000'",
     ),
+    ports: str | None = typer.Option(
+        None, "--ports", "-p", help="Port spec override, e.g. 1-65535 or 80,443"
+    ),
+    all_ports: bool = typer.Option(False, "--all-ports", help="Full TCP range (-p-)"),
+    top_ports: int | None = typer.Option(None, "--top-ports", help="Scan the N most common ports"),
     client: str = typer.Option("", "--client"),
     no_enum: bool = typer.Option(False, "--no-enum", help="Skip secondary tools after Nmap"),
     pn: bool = typer.Option(False, "--pn", help="Skip host discovery (-Pn)"),
 ) -> None:
-    """Live Nmap (Linux) then vault + secondary enum. Resume-aware."""
+    """Live Nmap (Linux) then vault + secondary enum. Resume-aware.
+
+    Defaults are fast (-T4, top 3000 TCP ports). Use --intensity stealth for the slow,
+    quiet profile or --intensity loud for full-range. Any nmap switch passed via
+    --nmap-args, or after a bare `--`, replaces the profile's equivalent setting.
+    """
     cwd = Path.cwd()
     engagement_dir = resolve_engagement_dir(out, cwd)
-    extra = nmap_args.split() if nmap_args else []
+    extra = _nmap_overrides(
+        nmap_args=nmap_args,
+        passthrough=list(ctx.args),
+        ports=ports,
+        all_ports=all_ports,
+        top_ports=top_ports,
+    )
     resolved_intensity = intensity_or_default(mode, intensity)
 
     existing = try_load_state(engagement_dir) if engagement_dir else None
@@ -263,7 +314,7 @@ def scan(
     )
     maybe_warn_check_metadata(state)
     _show_legal(state)
-    snap_preflight(state.path, allow_listener=True)
+    snap_preflight(state.path)
     try:
         run_scan(
             state,
@@ -313,7 +364,7 @@ def ingest(
         resume=False,
     )
     _show_legal(state)
-    snap_preflight(state.path, allow_listener=run_enum_tools)
+    snap_preflight(state.path)
     ingest_xml(state, xml_file)
     if not target:
         from va_workspace.core.state import save_state
@@ -559,21 +610,50 @@ def note(
 
 @app.command()
 def snap(
-    listen: bool = typer.Option(False, "--listen", help="Hotkey daemon (Ctrl+Alt+S)"),
+    listen: bool = typer.Option(False, "--listen", help="Start the hotkey listener daemon"),
+    foreground: bool = typer.Option(
+        False, "--foreground", help="Run the listener in this process (used by the daemon)"
+    ),
+    stop: bool = typer.Option(False, "--stop", help="Stop the hotkey listener daemon"),
+    show_status: bool = typer.Option(False, "--status", help="Show listener daemon status"),
     name: str | None = typer.Option(None, "--name", help="Caption / filename slug"),
     host: str | None = typer.Option(None, "--host", help="Save under 02-hosts/<ip>/evidence"),
-    hotkey: str = typer.Option("<ctrl>+<alt>+s", "--hotkey"),
+    hotkey: str = typer.Option(_SNAP_HOTKEY, "--hotkey"),
     no_clip: bool = typer.Option(False, "--no-clip"),
     out: Path | None = typer.Option(None, "--out"),
 ) -> None:
     """Region screenshot into the vault (fixed Evidence Snapper)."""
-    from va_workspace.core.snap import capture_region, listen_hotkey, resolve_vault
+    from va_workspace.core.snap import (
+        capture_region,
+        ensure_listener,
+        listen_hotkey,
+        resolve_vault,
+        snap_status,
+        stop_listener,
+    )
+    from va_workspace.core.snap_daemon import log_file
 
     path = resolve_vault(out)
     if path is None:
         log.error("not an engagement directory (cd into the vault or pass --out)")
         raise typer.Exit(code=2)
-    if listen:
+
+    if stop:
+        if stop_listener(path):
+            log.success("snap listener stopped")
+        else:
+            log.info("snap listener was not running")
+        return
+
+    if show_status:
+        status = snap_status(path)
+        out_console.print(status.summary())
+        for hint in status.hints():
+            log.warn(hint)
+        log.info(f"listener log: {log_file(path)}")
+        raise typer.Exit(code=0 if status.listening else 1)
+
+    if foreground:
         try:
             listen_hotkey(path, hotkey)
         except RuntimeError as exc:
@@ -582,6 +662,19 @@ def snap(
         except KeyboardInterrupt:
             log.info("stopped")
         return
+
+    if listen:
+        status, action = ensure_listener(path, hotkey, autostart=True)
+        if not status.listening:
+            log.error(f"snap listener not running ({action}) — {status.summary()}")
+            for hint in status.hints():
+                log.warn(hint)
+            log.info(f"listener log: {log_file(path)}")
+            raise typer.Exit(code=1)
+        log.success(f"snap listener {action} — pid {status.pid}, hotkey {hotkey}")
+        log.info("stays alive after this command; stop it with `va snap --stop`")
+        return
+
     result = capture_region(
         engagement=path, name=name, host=host, clipboard=not no_clip
     )
@@ -661,6 +754,92 @@ notes_app = typer.Typer(
     no_args_is_help=True, help="CSTM/CHECK operator notes from ca_misc_scripts."
 )
 app.add_typer(notes_app, name="notes")
+
+transcript_app = typer.Typer(
+    invoke_without_command=True,
+    help="Record a shell session into the vault (raw terminal log + command log).",
+)
+app.add_typer(transcript_app, name="transcript")
+
+
+@transcript_app.callback()
+def transcript_root(ctx: typer.Context) -> None:
+    """Start recording when no subcommand is given."""
+    if ctx.invoked_subcommand is None:
+        transcript_start()
+
+
+@transcript_app.command("start")
+def transcript_start(
+    name: str | None = typer.Option(None, "--name", help="Label for this session"),
+    out: Path | None = typer.Option(None, "--out"),
+    command: str | None = typer.Option(
+        None, "--command", "-c", help="Record a single command instead of an interactive shell"
+    ),
+) -> None:
+    """Open a recorded bash. Everything from here on lands in the vault; `exit` stops it."""
+    from va_workspace.core.transcript import TranscriptError, record
+
+    path = resolve_engagement_dir(out, Path.cwd())
+    if path is None:
+        log.error("not an engagement directory (cd into the vault or pass --out)")
+        raise typer.Exit(code=2)
+    try:
+        session = record(path, name, shell_command=command)
+    except TranscriptError as exc:
+        log.error(str(exc))
+        raise typer.Exit(code=2) from exc
+    log.success(f"raw log:     {session.raw}")
+    log.success(f"command log: {session.commands}")
+
+
+@transcript_app.command("list")
+def transcript_list(out: Path | None = typer.Option(None, "--out")) -> None:
+    """List recorded sessions in this vault."""
+    from va_workspace.core.transcript import list_transcripts, parse_tsv
+
+    path = resolve_engagement_dir(out, Path.cwd())
+    if path is None:
+        log.error("not an engagement directory")
+        raise typer.Exit(code=2)
+    sessions = list_transcripts(path)
+    if not sessions:
+        log.warn("no transcripts yet — run `va transcript`")
+        raise typer.Exit(code=1)
+    table = Table(title="Transcripts")
+    table.add_column("Name")
+    table.add_column("Commands")
+    table.add_column("Raw size")
+    for session in sessions:
+        size = session.raw.stat().st_size if session.raw.is_file() else 0
+        table.add_row(session.name, str(len(parse_tsv(session.tsv))), f"{size / 1024:.1f} KiB")
+    out_console.print(table)
+
+
+@transcript_app.command("show")
+def transcript_show(
+    name: str = typer.Argument(..., help="Transcript name or unique substring"),
+    raw: bool = typer.Option(False, "--raw", help="Print the raw terminal capture instead"),
+    out: Path | None = typer.Option(None, "--out"),
+) -> None:
+    """Print a recorded session's command log."""
+    from va_workspace.core.transcript import find_transcript, strip_ansi
+
+    path = resolve_engagement_dir(out, Path.cwd())
+    if path is None:
+        log.error("not an engagement directory")
+        raise typer.Exit(code=2)
+    try:
+        session = find_transcript(path, name)
+    except FileNotFoundError as exc:
+        log.error(str(exc))
+        raise typer.Exit(code=2) from exc
+    target = session.raw if raw else session.commands
+    if not target.is_file():
+        log.error(f"missing {target}")
+        raise typer.Exit(code=1)
+    text = target.read_text(encoding="utf-8", errors="replace")
+    out_console.print(strip_ansi(text) if raw else text)
 
 
 @notes_app.command("list")

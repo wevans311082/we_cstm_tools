@@ -93,33 +93,47 @@ class NmapPhase(StrEnum):
 
 
 DEFAULT_INTENSITY: dict[Mode, Intensity] = {
-    Mode.CHECK: Intensity.STEALTH,
+    Mode.CHECK: Intensity.STANDARD,
     Mode.LAB: Intensity.STANDARD,
     Mode.INTERNAL: Intensity.STANDARD,
 }
 
 PROFILE_WORKERS: dict[Intensity, int] = {
     Intensity.STEALTH: 2,
-    Intensity.STANDARD: 4,
-    Intensity.LOUD: 8,
+    Intensity.STANDARD: 8,
+    Intensity.LOUD: 16,
 }
 
 PROFILE_DELAY_SECONDS: dict[Intensity, float] = {
     Intensity.STEALTH: 1.0,
-    Intensity.STANDARD: 0.2,
+    Intensity.STANDARD: 0.0,
     Intensity.LOUD: 0.0,
 }
 
 PROFILE_MAX_RATE: dict[Intensity, int] = {
     Intensity.STEALTH: 300,
+    Intensity.STANDARD: 5000,
+    Intensity.LOUD: 20000,
+}
+
+# --min-rate is the single biggest nmap speed lever; stealth deliberately has none.
+PROFILE_MIN_RATE: dict[Intensity, int | None] = {
+    Intensity.STEALTH: None,
     Intensity.STANDARD: 1000,
     Intensity.LOUD: 5000,
 }
 
 PROFILE_MAX_RETRIES: dict[Intensity, int] = {
     Intensity.STEALTH: 2,
-    Intensity.STANDARD: 2,
-    Intensity.LOUD: 3,
+    Intensity.STANDARD: 1,
+    Intensity.LOUD: 1,
+}
+
+# Stops one unresponsive host stalling the whole phase.
+PROFILE_HOST_TIMEOUT: dict[Intensity, str | None] = {
+    Intensity.STEALTH: None,
+    Intensity.STANDARD: "15m",
+    Intensity.LOUD: "20m",
 }
 
 SCRIPT_TIMEOUT = "30s"

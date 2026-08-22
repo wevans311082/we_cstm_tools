@@ -19,13 +19,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from va_workspace.core import snap_daemon
 from va_workspace.core.engagement import resolve_engagement_dir
 from va_workspace.core.state import utc_now
 from va_workspace.util import log
 from va_workspace.util.shell import which
 
 _BUSY = threading.Lock()
-_LISTENER: threading.Thread | None = None
 
 
 @dataclass
@@ -220,6 +220,7 @@ class SnapStatus:
     clipboard: str | None
     hotkey_available: bool
     listening: bool = False
+    pid: int | None = None
 
     @property
     def ready(self) -> bool:
@@ -229,7 +230,7 @@ class SnapStatus:
         capture = self.capture or "missing"
         clipboard = self.clipboard or "missing"
         hotkey = "pynput" if self.hotkey_available else "missing"
-        listener = "listening" if self.listening else "idle"
+        listener = f"listening (pid {self.pid})" if self.listening else "idle"
         return f"screenshot: {capture} | clipboard: {clipboard} | hotkey: {hotkey} | {listener}"
 
     def hints(self) -> list[str]:
@@ -249,34 +250,31 @@ def hotkey_available() -> bool:
     return importlib.util.find_spec("pynput") is not None
 
 
-def snap_status() -> SnapStatus:
+def snap_status(engagement: Path | None = None) -> SnapStatus:
     """Preflight the evidence-capture subsystem (backends, clipboard, hotkey listener)."""
+    daemon = snap_daemon.status(engagement) if engagement is not None else None
     return SnapStatus(
         capture=detect_capture_backend(),
         clipboard=detect_clipboard_backend(),
         hotkey_available=hotkey_available(),
-        listening=_LISTENER is not None and _LISTENER.is_alive(),
+        listening=daemon is not None,
+        pid=daemon.pid if daemon else None,
     )
 
 
-def start_background_listener(engagement: Path, hotkey: str) -> SnapStatus:
-    """Start the hotkey capture daemon in a background thread. Idempotent."""
-    global _LISTENER
-    status = snap_status()
-    if status.listening:
-        return status
+def ensure_listener(engagement: Path, hotkey: str, *, autostart: bool) -> tuple[SnapStatus, str]:
+    """Check the detached listener, restarting it if it died. Returns (status, action)."""
+    status = snap_status(engagement)
     if not status.ready or not status.hotkey_available:
-        return status
-    thread = threading.Thread(
-        target=listen_hotkey,
-        args=(engagement, hotkey),
-        name="va-snap-listener",
-        daemon=True,
-    )
-    thread.start()
-    _LISTENER = thread
-    status.listening = thread.is_alive()
-    return status
+        return status, "unavailable"
+    info, action = snap_daemon.ensure(engagement, hotkey, autostart=autostart)
+    status.listening = info is not None
+    status.pid = info.pid if info else None
+    return status, action
+
+
+def stop_listener(engagement: Path) -> bool:
+    return snap_daemon.stop(engagement)
 
 
 def listen_hotkey(engagement: Path, hotkey: str) -> None:
