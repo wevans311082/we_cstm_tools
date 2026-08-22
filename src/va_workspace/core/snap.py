@@ -11,6 +11,7 @@ Fixes vs the old scrptn.py:
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import subprocess
 import threading
@@ -24,6 +25,7 @@ from va_workspace.util import log
 from va_workspace.util.shell import which
 
 _BUSY = threading.Lock()
+_LISTENER: threading.Thread | None = None
 
 
 @dataclass
@@ -210,6 +212,71 @@ def import_latest_picture(
 
 def resolve_vault(out: Path | None) -> Path | None:
     return resolve_engagement_dir(out, Path.cwd())
+
+
+@dataclass
+class SnapStatus:
+    capture: str | None
+    clipboard: str | None
+    hotkey_available: bool
+    listening: bool = False
+
+    @property
+    def ready(self) -> bool:
+        return self.capture is not None
+
+    def summary(self) -> str:
+        capture = self.capture or "missing"
+        clipboard = self.clipboard or "missing"
+        hotkey = "pynput" if self.hotkey_available else "missing"
+        listener = "listening" if self.listening else "idle"
+        return f"screenshot: {capture} | clipboard: {clipboard} | hotkey: {hotkey} | {listener}"
+
+    def hints(self) -> list[str]:
+        out: list[str] = []
+        if self.capture is None:
+            out.append(
+                "no screenshot backend: apt install maim xclip (X11) or grim slurp (Wayland)"
+            )
+        if self.clipboard is None:
+            out.append("no clipboard tool: apt install xclip (X11) or wl-clipboard (Wayland)")
+        if not self.hotkey_available:
+            out.append("hotkey listener unavailable: pipx inject va-workspace pynput")
+        return out
+
+
+def hotkey_available() -> bool:
+    return importlib.util.find_spec("pynput") is not None
+
+
+def snap_status() -> SnapStatus:
+    """Preflight the evidence-capture subsystem (backends, clipboard, hotkey listener)."""
+    return SnapStatus(
+        capture=detect_capture_backend(),
+        clipboard=detect_clipboard_backend(),
+        hotkey_available=hotkey_available(),
+        listening=_LISTENER is not None and _LISTENER.is_alive(),
+    )
+
+
+def start_background_listener(engagement: Path, hotkey: str) -> SnapStatus:
+    """Start the hotkey capture daemon in a background thread. Idempotent."""
+    global _LISTENER
+    status = snap_status()
+    if status.listening:
+        return status
+    if not status.ready or not status.hotkey_available:
+        return status
+    thread = threading.Thread(
+        target=listen_hotkey,
+        args=(engagement, hotkey),
+        name="va-snap-listener",
+        daemon=True,
+    )
+    thread.start()
+    _LISTENER = thread
+    status.listening = thread.is_alive()
+    return status
 
 
 def listen_hotkey(engagement: Path, hotkey: str) -> None:

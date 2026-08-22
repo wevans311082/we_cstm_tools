@@ -3,9 +3,39 @@ from __future__ import annotations
 from pathlib import Path
 
 from va_workspace.core.portsplit import parse_ports_expr, ports_to_expr, split_ports
-from va_workspace.core.snap import capture_region, import_latest_picture
+from va_workspace.core.snap import capture_region, import_latest_picture, snap_status
 from va_workspace.tools.smb_unauth import probe as smb_probe
 from va_workspace.tools.tls_versions import probe as tls_probe
+
+
+def test_snap_status_reports_missing_backend(monkeypatch: object) -> None:
+    from va_workspace.core import snap as snap_mod
+
+    monkeypatch.setattr(snap_mod, "detect_capture_backend", lambda: None)  # type: ignore[attr-defined]
+    monkeypatch.setattr(snap_mod, "detect_clipboard_backend", lambda: None)  # type: ignore[attr-defined]
+    status = snap_status()
+    assert not status.ready
+    assert not status.listening
+    assert any("screenshot backend" in hint for hint in status.hints())
+    assert "missing" in status.summary()
+
+
+def test_live_feed_records_hosts_and_ports(tmp_path: Path) -> None:
+    from va_workspace.core.live_feed import LIVE_NOTE, LiveFeed
+
+    feed = LiveFeed(tmp_path, "nmap TCP scan")
+    feed.feed("Nmap scan report for host.example (10.0.0.5)")
+    feed.feed("Discovered open port 443/tcp on 10.0.0.5")
+    feed.feed("Discovered open port 443/tcp on 10.0.0.5")  # duplicate is ignored
+    feed.feed("80/tcp   open  http    nginx 1.24")
+    feed.feed("Read data files from: /usr/share/nmap")
+
+    assert feed.hosts_found == 1
+    assert feed.ports_found == 2
+    body = (tmp_path / LIVE_NOTE).read_text(encoding="utf-8")
+    assert "10.0.0.5" in body
+    assert "**443/tcp** open" in body
+    assert "**80/tcp** open http" in body
 
 
 def test_smb_unauth_probe_handles_refused() -> None:

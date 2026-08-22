@@ -31,6 +31,7 @@ from va_workspace.core.state import save_state
 from va_workspace.core.vault import host_dir
 from va_workspace.models import EngagementState, Host, Job, Port
 from va_workspace.util import log
+from va_workspace.util.progress import job_progress
 from va_workspace.util.scope import url_in_scope
 from va_workspace.util.shell import run_command, which
 
@@ -235,7 +236,11 @@ def run_jobs(state: EngagementState, tools: list[ToolMapping]) -> None:
         return _run_one(state, job, tools, intensity)
 
     lock = threading.Lock()
-    with ThreadPoolExecutor(max_workers=profile.workers) as pool:
+    failed = 0
+    with (
+        job_progress("secondary enum", len(pending)) as advance,
+        ThreadPoolExecutor(max_workers=profile.workers) as pool,
+    ):
         futures = {pool.submit(_wrapped, job): job for job in pending}
         for future in as_completed(futures):
             finished = future.result()
@@ -245,3 +250,9 @@ def run_jobs(state: EngagementState, tools: list[ToolMapping]) -> None:
                         state.jobs[idx] = finished
                         break
                 save_state(state)
+                if finished.status == JobStatus.FAILED:
+                    failed += 1
+                advance(f"{finished.tool_id} {finished.host} [{finished.status}]")
+    if failed:
+        log.warn(f"secondary enum: {failed} job(s) failed (see 05-raw/tools)")
+    log.success(f"secondary enum: {len(pending) - failed}/{len(pending)} job(s) ok")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from va_workspace.config.profiles import (
@@ -14,13 +15,19 @@ from va_workspace.config.profiles import (
     nmap_profile,
 )
 from va_workspace.constants import Intensity, Mode, NmapPhase
+from va_workspace.core.live_feed import LiveFeed
 from va_workspace.core.nmap_parser import merge_hosts, parse_nmap_xml
 from va_workspace.core.state import save_state, utc_now
 from va_workspace.models import EngagementState, Host
 from va_workspace.util import log
-from va_workspace.util.shell import run_command, which
+from va_workspace.util.progress import phase_progress
+from va_workspace.util.shell import run_command_streamed, which
 
 SCAN_UNSUPPORTED = "va scan (live Nmap) is supported on Kali/Linux. Use va ingest on this OS."
+STATS_INTERVAL = "5s"
+
+# Called with (phase name, xml paths so far) once each phase produces usable XML.
+PhaseHook = Callable[[str, list[Path]], None]
 
 
 class ScanPlatformError(RuntimeError):
@@ -44,22 +51,57 @@ def _xml(stem: Path) -> Path:
     return Path(str(stem) + ".xml")
 
 
-def _run_argv(state: EngagementState, argv: list[str], stem: Path, timeout: int) -> Path:
+def _with_progress_flags(argv: list[str]) -> list[str]:
+    """Force periodic `Timing: About x% done` lines so the progress bar can advance."""
+    out = list(argv)
+    if "--stats-every" in out:
+        idx = out.index("--stats-every")
+        if idx + 1 < len(out):
+            out[idx + 1] = STATS_INTERVAL
+    else:
+        out[1:1] = ["--stats-every", STATS_INTERVAL]
+    if not any(item.startswith("-v") for item in out):
+        out.insert(1, "-v")
+    return out
+
+
+def _fail(state: EngagementState, message: str) -> None:
+    state.nmap.status = NmapPhase.FAILED
+    state.nmap.error = message
+    state.nmap.finished = utc_now()
+    save_state(state)
+
+
+def _run_argv(
+    state: EngagementState, argv: list[str], stem: Path, timeout: int, *, label: str
+) -> Path:
+    argv = _with_progress_flags(argv)
     log.info("nmap: " + " ".join(argv))
-    result = run_command(argv, timeout=timeout)
+    live = LiveFeed(state.path, label)
+
+    with phase_progress(label) as bar:
+
+        def on_line(line: str) -> None:
+            live.feed(line)
+            bar(line)
+
+        result = run_command_streamed(argv, timeout=timeout, on_stdout=on_line)
     xml_path = _xml(stem)
     if result.timed_out:
-        state.nmap.status = NmapPhase.FAILED
-        state.nmap.error = result.error
-        state.nmap.finished = utc_now()
-        save_state(state)
+        log.error(f"{label}: {result.error} ({live.summary()})")
+        _fail(state, result.error)
         raise TimeoutError(result.error)
     if not xml_path.is_file():
-        state.nmap.status = NmapPhase.FAILED
-        state.nmap.error = result.stderr or result.error or "nmap produced no XML"
-        state.nmap.finished = utc_now()
-        save_state(state)
-        raise RuntimeError(state.nmap.error)
+        message = result.stderr.strip() or result.error or "nmap produced no XML"
+        log.error(f"{label} failed (exit {result.returncode}): {message}")
+        _fail(state, message)
+        raise RuntimeError(message)
+    if result.returncode != 0:
+        log.warn(f"{label}: nmap exited {result.returncode}; using partial XML")
+    for line in result.stderr.splitlines():
+        if line.strip():
+            log.warn(f"nmap: {line.strip()}")
+    log.success(f"{label}: complete — {live.summary()} → {xml_path.name}")
     return xml_path
 
 
@@ -83,6 +125,7 @@ def run_nmap_pipeline(
     *,
     resume: bool = False,
     skip_host_discovery: bool = False,
+    on_phase: PhaseHook | None = None,
 ) -> list[Path]:
     """Phases A discovery, B TCP, C UDP, D NSE. Returns XML paths to merge."""
     require_linux_scan()
@@ -97,12 +140,24 @@ def run_nmap_pipeline(
     raw.mkdir(parents=True, exist_ok=True)
     xmls: list[Path] = []
 
+    def phase_done(name: str) -> None:
+        if on_phase is None:
+            return
+        try:
+            on_phase(name, [path for path in xmls if path.is_file()])
+        except Exception as exc:  # partial results must never abort the scan
+            log.warn(f"incremental write after {name} failed: {exc}")
+
     state.nmap.status = NmapPhase.RUNNING
     state.nmap.output_stem = str(nmap_output_stem(state.path))
     if not state.nmap.started:
         state.nmap.started = utc_now()
     state.nmap.skip_host_discovery = skip_host_discovery
     save_state(state)
+    log.info(
+        f"scan starting: {len(state.targets)} target spec(s), intensity={intensity}, "
+        f"mode={mode}, timeout={profile.nmap_timeout}s per phase"
+    )
 
     discovery_xml: Path | None = None
     if skip_host_discovery:
@@ -124,7 +179,9 @@ def run_nmap_pipeline(
             excludes=state.excludes,
             intensity=intensity,
         )
-        discovery_xml = _run_argv(state, argv, stem, profile.nmap_timeout)
+        discovery_xml = _run_argv(
+            state, argv, stem, profile.nmap_timeout, label="nmap host discovery"
+        )
         state.nmap.discovery = "complete"
         save_state(state)
         xmls.append(discovery_xml)
@@ -133,6 +190,7 @@ def run_nmap_pipeline(
         xmls.append(discovery_xml)
 
     targets = _live_targets(state, discovery_xml)
+    phase_done("discovery")
 
     tcp_xml = _xml(_stem(state.path, "tcp"))
     if resume and state.nmap.tcp == "complete" and tcp_xml.is_file():
@@ -150,10 +208,11 @@ def run_nmap_pipeline(
         )
         for note in notes:
             log.warn(note)
-        tcp_xml = _run_argv(state, argv, stem, profile.nmap_timeout)
+        tcp_xml = _run_argv(state, argv, stem, profile.nmap_timeout, label="nmap TCP scan")
         state.nmap.tcp = "complete"
         save_state(state)
         xmls.append(tcp_xml)
+    phase_done("tcp")
 
     udp_xml = _xml(_stem(state.path, "udp"))
     udp_argv, udp_notes = build_udp_argv(
@@ -172,10 +231,17 @@ def run_nmap_pipeline(
         log.info("resume: udp complete")
         xmls.append(udp_xml)
     else:
-        udp_xml = _run_argv(state, udp_argv, _stem(state.path, "udp"), profile.nmap_timeout)
+        udp_xml = _run_argv(
+            state,
+            udp_argv,
+            _stem(state.path, "udp"),
+            profile.nmap_timeout,
+            label="nmap UDP scan",
+        )
         state.nmap.udp = "complete"
         save_state(state)
         xmls.append(udp_xml)
+    phase_done("udp")
 
     parsed: list[list[Host]] = []
     for path in xmls:
@@ -208,7 +274,11 @@ def run_nmap_pipeline(
             for note in notes:
                 log.warn(note)
             script_xml = _run_argv(
-                state, argv, _stem(state.path, "scripts"), profile.nmap_timeout
+                state,
+                argv,
+                _stem(state.path, "scripts"),
+                profile.nmap_timeout,
+                label="nmap NSE scripts",
             )
             state.nmap.scripts = "complete"
             save_state(state)

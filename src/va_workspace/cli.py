@@ -53,14 +53,55 @@ IntensityOpt = typer.Option(
     None, "--intensity", help="stealth | standard | loud (default depends on --mode)"
 )
 
+_SNAP_HOTKEY = "<ctrl>+<alt>+s"
+_snap_opts: dict[str, object] = {"check": True, "listen": False, "hotkey": _SNAP_HOTKEY}
+
 
 @app.callback()
 def _root(
     verbose: bool = typer.Option(False, "--verbose", "-v"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip non-legal confirmations"),
+    snap_listen: bool = typer.Option(
+        False, "--snap-listen", help="Start the screenshot hotkey listener for this command"
+    ),
+    no_snap_check: bool = typer.Option(
+        False, "--no-snap-check", help="Skip the screenshot subsystem preflight"
+    ),
+    snap_hotkey: str = typer.Option(_SNAP_HOTKEY, "--snap-hotkey"),
 ) -> None:
     """va-workspace."""
     _ = (verbose, yes)
+    _snap_opts.update({"check": not no_snap_check, "listen": snap_listen, "hotkey": snap_hotkey})
+
+
+def snap_preflight(engagement: Path | None, *, allow_listener: bool = False) -> None:
+    """Report screenshot/listener readiness, and start the listener if asked for.
+
+    The listener is a daemon thread, so it only outlives commands that keep running
+    (scan/enum); short commands just report readiness.
+    """
+    if not _snap_opts["check"]:
+        return
+    from va_workspace.core.snap import snap_status, start_background_listener
+
+    want_listener = bool(_snap_opts["listen"]) and allow_listener and engagement is not None
+    if want_listener:
+        assert engagement is not None
+        status = start_background_listener(engagement, str(_snap_opts["hotkey"]))
+    else:
+        status = snap_status()
+    if status.ready:
+        log.info(f"[dim]snap ready — {status.summary()}[/dim]")
+    else:
+        log.warn(f"snap not ready — {status.summary()}")
+    for hint in status.hints():
+        log.warn(f"  {hint}")
+    if want_listener and not status.listening:
+        log.warn("screenshot hotkey listener did not start")
+    elif status.listening:
+        log.success(f"screenshot hotkey listener active ({_snap_opts['hotkey']})")
+    elif status.ready and status.hotkey_available and not allow_listener:
+        log.info(f"[dim]hotkey capture: run `va snap --listen` (default {_SNAP_HOTKEY})[/dim]")
 
 
 @nse_app.command("path")
@@ -162,6 +203,7 @@ def init_cmd(
         resume=False,
     )
     maybe_warn_check_metadata(state)
+    snap_preflight(state.path)
     log.success(f"initialised vault at {state.path}")
 
 
@@ -221,6 +263,7 @@ def scan(
     )
     maybe_warn_check_metadata(state)
     _show_legal(state)
+    snap_preflight(state.path, allow_listener=True)
     try:
         run_scan(
             state,
@@ -270,6 +313,7 @@ def ingest(
         resume=False,
     )
     _show_legal(state)
+    snap_preflight(state.path, allow_listener=run_enum_tools)
     ingest_xml(state, xml_file)
     if not target:
         from va_workspace.core.state import save_state
@@ -322,6 +366,62 @@ def status(
     table.add_row("findings", str(len(state.findings)))
     table.add_row("targets", ", ".join(state.targets) or "-")
     out_console.print(table)
+    snap_preflight(state.path)
+
+
+@app.command()
+def watch(
+    out: Path | None = typer.Option(None, "--out"),
+    interval: float = typer.Option(3.0, "--interval", min=0.5, help="Refresh seconds"),
+) -> None:
+    """Follow a running scan from a second terminal (live hosts, ports, phases)."""
+    import time
+
+    from rich.live import Live
+
+    from va_workspace.core.live_feed import LIVE_NOTE
+
+    path = resolve_engagement_dir(out, Path.cwd())
+    if path is None:
+        log.error("not an engagement directory (pass --out or cd into the vault)")
+        raise typer.Exit(code=2)
+
+    def render() -> Table:
+        state = try_load_state(path)
+        table = Table(title=f"watching {path}")
+        table.add_column("Field")
+        table.add_column("Value")
+        if state is None:
+            table.add_row("state", "no state.json yet")
+            return table
+        table.add_row("nmap", str(state.nmap.status))
+        table.add_row(
+            "phases",
+            f"disc={state.nmap.discovery} tcp={state.nmap.tcp} "
+            f"udp={state.nmap.udp} nse={state.nmap.scripts}",
+        )
+        table.add_row("started", state.nmap.started or "-")
+        table.add_row("hosts", str(len(state.hosts)))
+        table.add_row("open ports", str(sum(len(h.open_ports) for h in state.hosts)))
+        table.add_row(
+            "jobs",
+            f"{sum(1 for j in state.jobs if j.status == JobStatus.COMPLETE)}/{len(state.jobs)}",
+        )
+        if state.nmap.error:
+            table.add_row("error", f"[red]{state.nmap.error}[/red]")
+        note = path / LIVE_NOTE
+        if note.is_file():
+            recent = note.read_text(encoding="utf-8").splitlines()[-6:]
+            table.add_row("recent", "\n".join(line for line in recent if line.startswith("-")))
+        return table
+
+    try:
+        with Live(render(), console=out_console, refresh_per_second=4) as live:
+            while True:
+                time.sleep(interval)
+                live.update(render())
+    except KeyboardInterrupt:
+        log.info("stopped watching")
 
 
 @finding_app.command("templates")

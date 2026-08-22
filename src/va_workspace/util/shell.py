@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import IO
 
 
 @dataclass
@@ -43,16 +46,9 @@ def run_command(
     env: dict[str, str] | None = None,
 ) -> CommandResult:
     """Run an external binary with a timeout. argv must be a list (no shell)."""
-    if not argv:
-        return CommandResult(argv=[], returncode=-1, stdout="", stderr="", error="empty argv")
-    if any(not isinstance(item, str) or item == "" for item in argv):
-        return CommandResult(
-            argv=list(argv),
-            returncode=-1,
-            stdout="",
-            stderr="",
-            error="argv items must be non-empty strings",
-        )
+    bad = _argv_error(argv)
+    if bad is not None:
+        return bad
     try:
         completed = subprocess.run(
             argv,
@@ -96,6 +92,100 @@ def run_command(
         returncode=int(completed.returncode),
         stdout=completed.stdout or "",
         stderr=completed.stderr or "",
+    )
+
+
+def _argv_error(argv: list[str]) -> CommandResult | None:
+    if not argv:
+        return CommandResult(argv=[], returncode=-1, stdout="", stderr="", error="empty argv")
+    if any(not isinstance(item, str) or item == "" for item in argv):
+        return CommandResult(
+            argv=list(argv),
+            returncode=-1,
+            stdout="",
+            stderr="",
+            error="argv items must be non-empty strings",
+        )
+    return None
+
+
+def _drain(stream: IO[str], sink: list[str], on_line: Callable[[str], None] | None) -> None:
+    with stream:
+        for line in stream:
+            sink.append(line)
+            if on_line is not None:
+                try:
+                    on_line(line.rstrip("\n"))
+                except Exception:  # a broken progress display must not kill the scan
+                    pass
+
+
+def run_command_streamed(
+    argv: list[str],
+    *,
+    timeout: int,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+    on_stdout: Callable[[str], None] | None = None,
+    on_stderr: Callable[[str], None] | None = None,
+) -> CommandResult:
+    """Like run_command, but hands each output line to a callback as it arrives."""
+    bad = _argv_error(argv)
+    if bad is not None:
+        return bad
+    try:
+        proc = subprocess.Popen(  # noqa: S603 - argv list, shell=False
+            argv,
+            cwd=cwd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            shell=False,
+        )
+    except FileNotFoundError as exc:
+        return CommandResult(
+            argv=list(argv),
+            returncode=-1,
+            stdout="",
+            stderr="",
+            error=f"binary not found: {exc}",
+        )
+    except OSError as exc:
+        return CommandResult(argv=list(argv), returncode=-1, stdout="", stderr="", error=str(exc))
+
+    out_lines: list[str] = []
+    err_lines: list[str] = []
+    readers = [
+        threading.Thread(target=_drain, args=(proc.stdout, out_lines, on_stdout), daemon=True),
+        threading.Thread(target=_drain, args=(proc.stderr, err_lines, on_stderr), daemon=True),
+    ]
+    for reader in readers:
+        reader.start()
+
+    timed_out = False
+    try:
+        proc.wait(timeout=timeout or None)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        proc.kill()
+        proc.wait()
+    except KeyboardInterrupt:
+        proc.terminate()
+        proc.wait()
+        raise
+    finally:
+        for reader in readers:
+            reader.join(timeout=10)
+
+    return CommandResult(
+        argv=list(argv),
+        returncode=int(proc.returncode),
+        stdout="".join(out_lines),
+        stderr="".join(err_lines),
+        timed_out=timed_out,
+        error=f"timed out after {timeout}s" if timed_out else "",
     )
 
 
