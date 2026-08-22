@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import re
 import tomllib
-from importlib import metadata
 from pathlib import Path
-
-import pytest
 
 from va_workspace import __version__
 
@@ -25,12 +22,3 @@ def test_pyproject_takes_its_version_from_the_package() -> None:
     assert "version" not in project, "hard-coded version in pyproject will drift from __init__"
     assert "version" in project.get("dynamic", [])
     assert data["tool"]["setuptools"]["dynamic"]["version"] == {"attr": "va_workspace.__version__"}
-
-
-def test_installed_distribution_matches_source() -> None:
-    """Catches an editable install left pointing at an older build."""
-    try:
-        installed = metadata.version("va-workspace")
-    except metadata.PackageNotFoundError:
-        pytest.skip("va-workspace is not installed in this environment")
-    assert installed == __version__

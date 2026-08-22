@@ -176,3 +176,14 @@ def merge_hosts(*groups: list[Host]) -> list[Host]:
                     current.host_scripts.append(script)
                     seen_host.add(script.id)
     return [by_ip[ip] for ip in order]
+
+
+def is_reportable(host: Host) -> bool:
+    """False for addresses nmap only listed because -v echoes down hosts."""
+    return host.status == "up" or bool(host.ports)
+
+
+def filter_reportable(hosts: list[Host]) -> tuple[list[Host], int]:
+    """Drop down hosts with nothing to show. Returns (kept, dropped count)."""
+    kept = [host for host in hosts if is_reportable(host)]
+    return kept, len(hosts) - len(kept)

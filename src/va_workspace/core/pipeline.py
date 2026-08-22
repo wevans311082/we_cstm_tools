@@ -8,7 +8,7 @@ from pathlib import Path
 from va_workspace.config.load import load_tool_mappings
 from va_workspace.constants import NmapPhase
 from va_workspace.core.leads import write_leads
-from va_workspace.core.nmap_parser import merge_hosts, parse_nmap_xml
+from va_workspace.core.nmap_parser import filter_reportable, merge_hosts, parse_nmap_xml
 from va_workspace.core.nmap_runner import nmap_output_stem, run_nmap_pipeline
 from va_workspace.core.orchestrator import run_jobs
 from va_workspace.core.state import save_state
@@ -32,6 +32,9 @@ def ingest_xmls(
     dest_dir.mkdir(parents=True, exist_ok=True)
     parsed = [parse_nmap_xml(path) for path in existing]
     hosts = merge_hosts(*parsed) if len(parsed) > 1 else parsed[0]
+    hosts, skipped = filter_reportable(hosts)
+    if skipped:
+        log.info(f"skipped {skipped} down host(s) with no open ports")
     if copy_primary:
         dest = dest_dir / "scan.xml"
         src = existing[0]

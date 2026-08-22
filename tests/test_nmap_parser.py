@@ -4,7 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from va_workspace.core.nmap_parser import NmapParseError, parse_nmap_xml
+from va_workspace.core.nmap_parser import (
+    NmapParseError,
+    filter_reportable,
+    is_reportable,
+    parse_nmap_xml,
+)
+from va_workspace.models import Host, Port
 
 
 def test_parse_mixed_lab(nmap_xml: Path) -> None:
@@ -35,3 +41,36 @@ def test_parse_rejects_garbage(tmp_path: Path) -> None:
     junk.write_text("<root/>", encoding="utf-8")
     with pytest.raises(NmapParseError):
         parse_nmap_xml(junk)
+
+
+def test_parse_still_returns_down_hosts(nmap_xml: Path) -> None:
+    """The parser stays faithful to the XML; filtering is an ingest decision."""
+    hosts = parse_nmap_xml(nmap_xml)
+    assert any(h.status == "down" for h in hosts)
+
+
+def test_down_host_with_no_ports_is_not_reportable() -> None:
+    assert not is_reportable(Host(ip="10.0.0.9", status="down"))
+
+
+def test_up_host_with_no_open_ports_is_kept() -> None:
+    """A live host with everything filtered is still a real result."""
+    assert is_reportable(Host(ip="10.0.0.5", status="up"))
+
+
+def test_down_host_that_still_has_ports_is_kept() -> None:
+    host = Host(
+        ip="10.0.0.7",
+        status="down",
+        ports=[Port(number=80, protocol="tcp", state="open")],
+    )
+    assert is_reportable(host)
+
+
+def test_filter_reportable_counts_drops(nmap_xml: Path) -> None:
+    hosts = parse_nmap_xml(nmap_xml)
+    kept, dropped = filter_reportable(hosts)
+
+    assert dropped == 1
+    assert [h.ip for h in kept] == ["10.10.10.5", "10.10.10.8"]
+    assert all(h.status != "down" or h.ports for h in kept)

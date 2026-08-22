@@ -17,6 +17,23 @@ def test_doctor_exits_when_nmap_missing() -> None:
     assert "va doctor" in result.stdout or "nmap" in result.stdout + result.stderr
 
 
+def test_down_hosts_get_no_vault_notes(tmp_path: Path, nmap_xml: Path) -> None:
+    """Verbose nmap lists down hosts; they must not become vault noise."""
+    out = tmp_path / "vault"
+    result = runner.invoke(
+        app,
+        ["--no-snap-check", "ingest", str(nmap_xml), "--out", str(out), "--client", "acme"],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+
+    host_dirs = {p.name for p in (out / "02-hosts").iterdir() if p.is_dir()}
+    assert host_dirs == {"10.10.10.5", "10.10.10.8"}
+    assert "10.10.10.9" not in host_dirs
+
+    state = (out / "state.json").read_text(encoding="utf-8")
+    assert "10.10.10.9" not in state
+
+
 def test_ingest_and_finding(tmp_path: Path, nmap_xml: Path) -> None:
     out = tmp_path / "vault"
     result = runner.invoke(
